@@ -27,18 +27,20 @@ class DetoxifyBackend(RatingBackend):
         self.model = Detoxify(model_type=model_type, device=device)
         self.amp = amp
 
+    @torch.inference_mode()
+    def forward(self, prompts: list[str]) -> dict[str, list[np.ndarray]]:
+        if self.amp:
+            with torch.autocast(device_type=self.device):
+                return self.model.predict(prompts)
+        else:
+            return self.model.predict(prompts)
+
     def rate(self, prompt: str) -> RatingResult:
         return self.rate_batch([prompt])[0]
 
-    @torch.inference_mode()
     def rate_batch(self, prompts: list[str]) -> list[RatingResult]:
         try:
-            if self.amp:
-                with torch.autocast(device_type=self.device):
-                    preds: dict[str, list[np.ndarray]] = self.model.predict(prompts)
-            else:
-                preds: dict[str, list[np.ndarray]] = self.model.predict(prompts)
-
+            preds = self.forward(prompts)
             keys = list(preds.keys())
             values = list(preds.values())
 
