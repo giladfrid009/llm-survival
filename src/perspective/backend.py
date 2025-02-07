@@ -37,9 +37,9 @@ class PerspectiveBackend(RatingBackend):
         """
         self.api_key = api_key
         self.rate_limit = rate_limit
+
         self._lock = threading.Lock()
-        # Initialize last request time sufficiently in the past.
-        self._last_request_time = time.time() - (1.0 / rate_limit)
+        self._last_request_time = time.time() - 1.0
         self.service = self._build_service()
 
     def _build_service(self):
@@ -68,16 +68,7 @@ class PerspectiveBackend(RatingBackend):
             self._last_request_time = time.time()
 
     def rate(self, prompt: str) -> RatingResult:
-        """
-        Rate a full prompt using the Perspective API. Only summary scores are returned.
-
-        Args:
-            prompt (str): The prompt text.
-
-        Returns:
-            RatingResult: Contains a dict mapping attribute names (lowercased)
-                to their computed scores or an error message.
-        """
+        
         self._enforce_rate_limit()
 
         # see https://support.perspectiveapi.com/s/about-the-api-methods?language=en_US

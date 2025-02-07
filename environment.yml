@@ -14,6 +14,8 @@ dependencies:
   - ipykernel
   - jupyter
   - tqdm
+  - numpy
   - pip:
     - pip-tools
+    - detoxify
 
