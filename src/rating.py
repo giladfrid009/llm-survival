@@ -100,21 +100,32 @@ class RatingRunner:
         total_prompts = len(prompts)
         batches = [prompts[i : i + batch_size] for i in range(0, total_prompts, batch_size)]
 
-        # Sequential processing with tqdm progress bar.
+        # Sequential processing.
         if num_workers <= 0:
             results = []
-            for batch in tqdm(batches, desc="Processing Batches", unit="batch"):
+            for batch in tqdm(batches, desc="Processing", unit="batch"):
                 results.extend(self.backend.rate_batch(batch))
             return results
-        else:
-            # Parallel processing using ThreadPoolExecutor with a tqdm progress bar.
-            results_per_batch = [None] * len(batches)
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                # Submit each batch to the executor.
-                future_to_idx = {executor.submit(self.backend.rate_batch, batch): idx for idx, batch in enumerate(batches)}
-                # Use as_completed along with tqdm to show progress as futures complete.
-                for future in tqdm(as_completed(future_to_idx), total=len(future_to_idx), desc="Processing Batches", unit="batch"):
-                    idx = future_to_idx[future]
-                    results_per_batch[idx] = future.result()
-            # Flatten the list of lists while preserving original batch order.
-            return [result for batch in results_per_batch for result in batch]
+
+        # Parallel processing.
+        results_per_batch = [None] * len(batches)
+
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+
+            # Submit each batch to the executor and record its index.
+            future_to_index = {}
+            for batch_index, batch in enumerate(batches):
+                future = executor.submit(self.backend.rate_batch, batch)
+                future_to_index[future] = batch_index
+
+            # Process futures as they complete.
+            for completed_future in tqdm(as_completed(future_to_index), total=len(future_to_index), desc="Processing", unit="batch"):
+                batch_index = future_to_index[completed_future]
+                batch_results = completed_future.result()
+                results_per_batch[batch_index] = batch_results
+
+        # Flatten the list of lists.
+        results = []
+        for batch_result in results_per_batch:
+            results.extend(batch_result)
+        return results
