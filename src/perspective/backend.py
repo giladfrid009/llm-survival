@@ -32,6 +32,7 @@ class PerspectiveBackend(RatingBackend):
     def __init__(self, api_key: str, rate_limit: int = 1):
         """
         Args:
+            api_key (str): The API key for the Perspective API.
             rate_limit (int): Maximum number of API requests per second.
         """
         self.api_key = api_key
