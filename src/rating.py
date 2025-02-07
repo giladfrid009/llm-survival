@@ -73,29 +73,35 @@ class RatingRunner:
     def rate_single(self, prompt: str) -> RatingResult:
         """
         Rate a single prompt.
+
+        Args:
+            prompt (str): The prompt text to be rated.
+
+        Returns:
+            RatingResult: The result, containing scores or an error message.
         """
         return self.backend.rate(prompt)
 
     def rate_batch(self, prompts: list[str]) -> list[RatingResult]:
         """
         Rate a batch of prompts sequentially.
+
+        Args:
+            prompts (list[str]): A batch of prompt strings.
+
+        Returns:
+            list[RatingResult]: The results for each prompt.
         """
         return self.backend.rate_batch(prompts)
 
     def rate_stram(self, prompts: Iterable[str], batch_size: int = 100) -> Iterable[RatingResult]:
         """
-        Rate all prompts using batching.
-
-        This method splits the list of prompts into batches of size `batch_size`. Each batch is
-        processed by calling the backend's `rate_batch()` method. The results are returned in the
-        same order as the input prompts.
-
+        Rate a stream of prompt strings by processing them in batches.
         Args:
-            prompts (list[str]): A list of prompt strings.
-            batch_size (int): Number of prompts per batch.
-
-        Returns:
-            Iterable[RatingResult]: An iterable of results for each prompt.
+            prompts (Iterable[str]): An iterable of prompt strings to be rated.
+            batch_size (int, optional): Number of prompts to process in each batch. Defaults to 100.
+        Yields:
+            RatingResult: The rating result for each processed prompt from the batch.
         """
         batches = batchify(prompts, batch_size)
         for batch in tqdm(batches, desc="Processing", unit="batch"):
@@ -103,16 +109,16 @@ class RatingRunner:
 
     def rate_stream_batched(self, prompts: Iterable[Iterable[str]]) -> Iterable[list[RatingResult]]:
         """
-        Rate all prompts using batching.
-
-        This method processes each batch of prompts by calling the backend's `rate_batch()` method.
-        The results are returned in the same order as the input prompts.
-
-        Args:
-            prompts (Iterable[Iterable[str]]): An iterable of batches of prompt strings.
-
-        Returns:
-            Iterable[list[RatingResult]]: An iterable of results for each batch.
+        Rate a stream of batched prompts.
+        This method processes an iterable containing batches of prompt strings. Each batch is
+        ensured to be a list (if it isn't already) and then passed to the rate_batch method to
+        generate ratings for that batch. The progress of processing is displayed using tqdm.
+        Parameters:
+            prompts (Iterable[Iterable[str]]): An iterable where each element is an iterable of
+                                               prompt strings constituting a batch.
+        Yields:
+            list[RatingResult]: A list of RatingResult objects corresponding to the ratings of the
+                                prompts in the batch.
         """
         for batch in tqdm(prompts, desc="Processing", unit="batch"):
             if not isinstance(batch, list):

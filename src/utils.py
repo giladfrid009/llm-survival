@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Sized, Iterator
+from collections.abc import Iterable, Iterator
 from typing import TypeVar, Generic, List
 
 T = TypeVar("T")
