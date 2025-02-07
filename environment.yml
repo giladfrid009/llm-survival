@@ -2,12 +2,18 @@ name: llm-survival
 channels:
   - conda-forge
   - defaults
+  - anaconda
 dependencies:
-  - python=3.8.10
-  - cudatoolkit=11.3
+  - python=3.10
   - google-api-python-client
   - pip
+  - pandas
+  - matplotlib
+  - seaborn
   - ipython
+  - ipykernel
+  - jupyter
+  - tqdm
   - pip:
     - pip-tools
-    - -r requirements.txt
+
