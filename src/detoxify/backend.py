@@ -28,33 +28,33 @@ class DetoxifyBackend(RatingBackend):
         self.amp = amp
 
     @torch.inference_mode()
-    def forward(self, prompts: list[str]) -> dict[str, list[np.ndarray]]:
+    def forward(self, texts: list[str]) -> dict[str, list[np.ndarray]]:
         if self.amp:
             with torch.autocast(device_type=self.device):
-                return self.model.predict(prompts)
+                return self.model.predict(texts)
         else:
-            return self.model.predict(prompts)
+            return self.model.predict(texts)
 
-    def rate(self, prompt: str) -> RatingResult:
-        return self.rate_batch([prompt])[0]
+    def rate(self, text: str) -> RatingResult:
+        return self.rate_batch([text])[0]
 
-    def rate_batch(self, prompts: list[str]) -> list[RatingResult]:
+    def rate_batch(self, texts: list[str]) -> list[RatingResult]:
         try:
-            preds = self.forward(prompts)
+            preds = self.forward(texts)
             keys = list(preds.keys())
             values = list(preds.values())
 
             results = []
-            for i, prompt in enumerate(prompts):
+            for i, text in enumerate(texts):
                 scores = OrderedDict()
                 for k, v in zip(keys, values):
                     scores[k] = v[i]
 
-                rating = RatingResult(prompt=prompt, scores=scores)
+                rating = RatingResult(text=text, scores=scores)
                 results.append(rating)
 
             return results
 
         except Exception as e:
-            # Mark all prompts with the error if an exception occurs.
-            return [RatingResult(prompt=p, error=str(e)) for p in prompts]
+            # Mark all texts with the error if an exception occurs.
+            return [RatingResult(text=t, error=str(e)) for t in texts]

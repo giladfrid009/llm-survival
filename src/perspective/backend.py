@@ -67,13 +67,13 @@ class PerspectiveBackend(RatingBackend):
                 time.sleep(min_interval - elapsed)
             self._last_request_time = time.time()
 
-    def rate(self, prompt: str) -> RatingResult:
+    def rate(self, text: str) -> RatingResult:
         
         self._enforce_rate_limit()
 
         # see https://support.perspectiveapi.com/s/about-the-api-methods?language=en_US
         request_body = {
-            "comment": {"text": prompt, "type": "PLAIN_TEXT"},
+            "comment": {"text": text, "type": "PLAIN_TEXT"},
             "requestedAttributes": {attr: {"scoreType": "PROBABILITY"} for attr in PERSPECTIVE_API_ATTRIBUTES},
             "spanAnnotations": False,
             "languages": ["en"],
@@ -90,8 +90,8 @@ class PerspectiveBackend(RatingBackend):
                 score_value = summary_scores.get("value")
                 scores[attr.lower()] = score_value
 
-            return RatingResult(prompt=prompt, scores=scores)
+            return RatingResult(text=text, scores=scores)
         except HttpError as e:
-            return RatingResult(prompt=prompt, error=str(e))
+            return RatingResult(text=text, error=str(e))
         except Exception as ex:
-            return RatingResult(prompt=prompt, error=str(ex))
+            return RatingResult(text=text, error=str(ex))
