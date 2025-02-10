@@ -104,7 +104,7 @@ class RatingRunner:
             RatingResult: The rating result for each processed text from the batch.
         """
         batches = batchify(texts, batch_size)
-        for batch in tqdm(batches, desc="Processing", unit="batch"):
+        for batch in tqdm(batches, desc="Rating", unit="batch"):
             yield from self.rate_batch(batch)
 
     def rate_stream_batched(self, texts: Iterable[Iterable[str]]) -> Iterable[list[RatingResult]]:
