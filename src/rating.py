@@ -120,7 +120,7 @@ class RatingRunner:
             list[RatingResult]: A list of RatingResult objects corresponding to the ratings of the
                                 texts in the batch.
         """
-        for batch in tqdm(texts, desc="Processing", unit="batch"):
+        for batch in tqdm(texts, desc="Rating", unit="batch"):
             if not isinstance(batch, list):
                 batch = list(batch)
             yield self.rate_batch(batch)
