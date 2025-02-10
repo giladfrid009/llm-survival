@@ -23,6 +23,19 @@ class RatingResult:
     scores: OrderedDict[str, float] | None = None
     error: str | None = None
 
+    def is_score_high(self, score: str, thresh: float) -> bool:
+        """
+        Check if the score for the given attribute is higher than the threshold.
+
+        Args:
+            score (str): The attribute to check.
+            thresh (float): The threshold value.
+
+        Returns:
+            bool: True if the score is higher than the threshold, False otherwise.
+        """
+        return self.scores[score] > thresh
+
 
 class RatingBackend(ABC):
     """
@@ -84,7 +97,7 @@ class RatingRunner:
 
     def rate_batch(self, texts: list[str]) -> list[RatingResult]:
         """
-        Rate a batch of texts sequentially.
+        Rate a batch of texts.
 
         Args:
             texts (list[str]): A batch of text strings.
