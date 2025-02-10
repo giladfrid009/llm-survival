@@ -23,19 +23,6 @@ class RatingResult:
     scores: OrderedDict[str, float] | None = None
     error: str | None = None
 
-    def is_score_high(self, score: str, thresh: float) -> bool:
-        """
-        Check if the score for the given attribute is higher than the threshold.
-
-        Args:
-            score (str): The attribute to check.
-            thresh (float): The threshold value.
-
-        Returns:
-            bool: True if the score is higher than the threshold, False otherwise.
-        """
-        return self.scores[score] > thresh
-
 
 class RatingBackend(ABC):
     """
