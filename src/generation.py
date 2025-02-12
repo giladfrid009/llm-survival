@@ -95,9 +95,12 @@ class GenerationRunner:
         Returns:
             Iterable[GenerationResult]: The results for each prompt.
         """
-        try:
+        if hasattr(self.backend, 'generate_stream') and callable(self.backend.generate_stream):
+            print("Using backend's stream generation method.")
+            print("Backend:", self.backend.generate_stream)
             return self.backend.generate_stream(prompts, batch_size)
-        except AttributeError:
+        else:
+            print("Using batch generation method.")
             batches = batchify(prompts, batch_size)
             for batch in tqdm(batches, desc="Generating", unit="batch"):
                 yield from self.generate_batch(batch)
