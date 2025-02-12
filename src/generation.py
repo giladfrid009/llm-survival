@@ -71,7 +71,7 @@ class GenerationRunner:
         """
         return self.backend.generate(prompt)
     
-    def generate_batch(self, prompts: list[str], batch_size: int = 1) -> list[GenerationResult]:
+    def generate_batch(self, prompts: list[str]) -> list[GenerationResult]:
         """
         Generate outputs for an entire batch of prompts.
 
@@ -95,11 +95,14 @@ class GenerationRunner:
         Returns:
             Iterable[GenerationResult]: The results for each prompt.
         """
-        batches = batchify(prompts, batch_size)
-        for batch in tqdm(batches, desc="Generating", unit="batch"):
-            yield from self.generate_batch(batch)
+        try:
+            return self.backend.generate_stream(prompts, batch_size)
+        except AttributeError:
+            batches = batchify(prompts, batch_size)
+            for batch in tqdm(batches, desc="Generating", unit="batch"):
+                yield from self.generate_batch(batch)
 
-    def generate_stream_batched(self, prompts: Iterable[str], batch_size: int = 1) -> Iterable[GenerationResult]:
+    def generate_stream_batched(self, prompts: Iterable[str]) -> Iterable[GenerationResult]:
         """
         Generate outputs for an entire stream of prompts in batches.
 

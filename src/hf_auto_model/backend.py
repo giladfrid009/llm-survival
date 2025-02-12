@@ -5,7 +5,7 @@ from ..generation import GenerationResult
 
 
 class AutoModelBackend:
-    def __init__(self, num_outputs: int = 1, model_name: str = "meta-llama/Llama-3.2-3B-Instruct", device: Optional[str] = None):
+    def __init__(self, num_outputs: int = 1, model_name: str = "meta-llama/Llama-3.2-3B", device: Optional[str] = None):
         """
         Initializes the generator backend.
 
@@ -19,10 +19,11 @@ class AutoModelBackend:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         
         # Load the tokenizer and model
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
+        self.model = AutoModelForCausalLM.from_pretrained(model_name)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.model = AutoModelForCausalLM.from_pretrained(model_name)
+        self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
         self.model.to(self.device)
 
     def generate(self, prompt: str, max_new_tokens: int = 50, **generation_kwargs) -> GenerationResult:
