@@ -49,6 +49,21 @@ class GenerationBackend(ABC):
             prompts (list[str]): A list of prompt strings.
         """
         return [self.generate(prompt) for prompt in prompts]
+
+    def generate_stream(self, prompts: Iterable[str], batch_size: int = 1) -> Iterable[GenerationResult]:
+        """
+        Generate outputs for an entire stream of prompts.
+
+        Args:
+            prompts (Iterable[str]): An iterable of prompt strings.
+            batch_size (int): The number of prompts to generate in parallel.
+
+        Returns:
+            Iterable[GenerationResult]: The results for each prompt.
+        """
+        batches = batchify(prompts, batch_size)
+        for batch in tqdm(batches, desc="Generating", unit="batch"):
+            yield from self.generate_batch(batch)
     
 
 class GenerationRunner:
@@ -95,15 +110,7 @@ class GenerationRunner:
         Returns:
             Iterable[GenerationResult]: The results for each prompt.
         """
-        if hasattr(self.backend, 'generate_stream') and callable(self.backend.generate_stream):
-            print("Using backend's stream generation method.")
-            print("Backend:", self.backend.generate_stream)
-            return self.backend.generate_stream(prompts, batch_size)
-        else:
-            print("Using batch generation method.")
-            batches = batchify(prompts, batch_size)
-            for batch in tqdm(batches, desc="Generating", unit="batch"):
-                yield from self.generate_batch(batch)
+        return self.backend.generate_stream(prompts, batch_size)
 
     def generate_stream_batched(self, prompts: Iterable[str]) -> Iterable[GenerationResult]:
         """
