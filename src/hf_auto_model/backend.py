@@ -1,10 +1,10 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from typing import List, Optional
-from ..generation import GenerationResult
+from ..generation import GenerationResult, GenerationBackend
 
 
-class AutoModelBackend:
+class AutoModelBackend(GenerationBackend):
     def __init__(self, num_outputs: int = 1, model_name: str = "meta-llama/Llama-3.2-3B", device: Optional[str] = None):
         """
         Initializes the generator backend.
