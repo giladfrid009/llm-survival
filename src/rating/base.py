@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from collections import OrderedDict
-from tqdm.auto import tqdm
 from typing import Iterable
 
+from tqdm.auto import tqdm
 from src.utils import batchify
 
 
@@ -13,15 +12,18 @@ class RatingResult:
     Represents the rating result for a single text.
 
     Attributes:
-        text (str): The input text.
-        scores (OrderedDict[str, float], optional: The computed score per attribute,
+        text (str, optional): The input text.
+        scores (dict[str, float], optional): The computed score per attribute,
             or None if an error occurred.
         error (str, optional): An error message if rating failed.
     """
 
-    text: str
-    scores: OrderedDict[str, float] | None = None
+    text: str = ""
+    scores: dict[str, float] | None = None
     error: str | None = None
+
+    def is_valid(self) -> bool:
+        return self.scores is not None and self.error is None
 
 
 class RatingBackend(ABC):
@@ -92,14 +94,18 @@ class RatingRunner:
         Returns:
             list[RatingResult]: The results for each text.
         """
+        if len(texts) == 0:
+            return []
         return self.backend.rate_batch(texts)
 
     def rate_stram(self, texts: Iterable[str], batch_size: int = 100) -> Iterable[RatingResult]:
         """
         Rate a stream of text strings by processing them in batches.
+
         Args:
             texts (Iterable[str]): An iterable of text strings to be rated.
             batch_size (int, optional): Number of texts to process in each batch. Defaults to 100.
+
         Yields:
             RatingResult: The rating result for each processed text from the batch.
         """

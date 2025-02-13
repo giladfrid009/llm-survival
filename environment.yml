@@ -2,17 +2,18 @@ name: llm-survival
 channels:
   - conda-forge
   - defaults
+  - anaconda
 dependencies:
-  - python>=3.10
-  - anaconda::jupyter
-  - google-api-python-client
-  - pandas
-  - matplotlib
-  - seaborn
-  - tqdm
-  - numpy
+  - python >=3.10,<3.12
+  - jupyter
   - pip
   - pip:
+    - cmake
+    - google-api-python-client
+    - pandas
+    - matplotlib
+    - tqdm
+    - numpy
     - torch
     - torchvision
     - torchaudio

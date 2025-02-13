@@ -1,11 +1,8 @@
 import time
 import threading
-from collections import OrderedDict
 
 from googleapiclient import discovery
-from googleapiclient.errors import HttpError
-
-from src.rating import RatingBackend, RatingResult
+from src.rating.base import RatingBackend, RatingResult
 
 PERSPECTIVE_API_ATTRIBUTES = (
     "TOXICITY",
@@ -19,7 +16,7 @@ PERSPECTIVE_API_ATTRIBUTES = (
 )
 
 
-class PerspectiveBackend(RatingBackend):
+class PerspectiveRater(RatingBackend):
     """
     Rating backend using Google's Perspective API.
 
@@ -68,7 +65,7 @@ class PerspectiveBackend(RatingBackend):
             self._last_request_time = time.time()
 
     def rate(self, text: str) -> RatingResult:
-        
+
         self._enforce_rate_limit()
 
         # see https://support.perspectiveapi.com/s/about-the-api-methods?language=en_US
@@ -82,16 +79,14 @@ class PerspectiveBackend(RatingBackend):
         try:
             response = self.service.comments().analyze(body=request_body).execute()
 
-            # Extract only the summary scores.
+            # Extract only the summary scores (score of entire text).
             attribute_scores = response.get("attributeScores", {})
-            scores = OrderedDict()
+            scores = {}
             for attr, data in attribute_scores.items():
                 summary_scores = data.get("summaryScore", {})
                 score_value = summary_scores.get("value")
                 scores[attr.lower()] = score_value
 
-            return RatingResult(text=text, scores=scores)
-        except HttpError as e:
-            return RatingResult(text=text, error=str(e))
+            return RatingResult(text, scores=scores)
         except Exception as ex:
-            return RatingResult(text=text, error=str(ex))
+            return RatingResult(text, error=str(ex))

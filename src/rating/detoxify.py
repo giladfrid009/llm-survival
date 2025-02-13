@@ -1,13 +1,10 @@
-from collections import OrderedDict
-
 import torch
 import numpy as np
 from detoxify import Detoxify
+from src.rating.base import RatingBackend, RatingResult
 
-from src.rating import RatingBackend, RatingResult
 
-
-class DetoxifyBackend(RatingBackend):
+class DetoxifyRater(RatingBackend):
     """
     Detoxify rating backend using the Detoxify model.
     """
@@ -46,15 +43,12 @@ class DetoxifyBackend(RatingBackend):
 
             results = []
             for i, text in enumerate(texts):
-                scores = OrderedDict()
-                for k, v in zip(keys, values):
-                    scores[k] = v[i]
-
-                rating = RatingResult(text=text, scores=scores)
+                scores = {k: v[i] for k, v in zip(keys, values)}
+                rating = RatingResult(text, scores=scores)
                 results.append(rating)
 
             return results
 
         except Exception as e:
             # Mark all texts with the error if an exception occurs.
-            return [RatingResult(text=t, error=str(e)) for t in texts]
+            return [RatingResult(t, error=str(e)) for t in texts]
