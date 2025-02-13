@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, BatchEncoding
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 import huggingface_hub
 from src.generation.base import GenerationResult, GenerationBackend
 
@@ -15,6 +15,7 @@ class ChatGenerator(GenerationBackend):
     ):
         """
         Initializes a HuggingFace chat-based model backend for text generation.
+        These model types are intended for chatbot-like interactions.
 
         Args:
             model_name (str): The model identifier (or path).
@@ -42,11 +43,6 @@ class ChatGenerator(GenerationBackend):
             padding_side="left",
         )
 
-        self.terminators = [
-            self.tokenizer.eos_token_id,
-            self.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
-        ]
-
         self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=dtype,
@@ -54,10 +50,19 @@ class ChatGenerator(GenerationBackend):
             **model_kwargs,
         ).eval()
 
-        # is it ok?
+        # if does not exist create a new padding token, 
+        # add it to the tokenizer and resize token embedding accordingly
         if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
+            pad_token = "<PAD>"
+            self.tokenizer.add_special_tokens({"pad_token": pad_token})
+            self.model.resize_token_embeddings(len(self.tokenizer))
+            self.model.config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
+            self.model.generation_config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
+            
+        self.terminators = [
+            self.tokenizer.eos_token_id,
+            self.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
+        ]
 
     @torch.inference_mode()
     def forward(self, inputs: dict, max_len: int, **kwargs) -> torch.Tensor:

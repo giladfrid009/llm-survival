@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, BatchEncoding
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 import huggingface_hub
 from src.generation.base import GenerationResult, GenerationBackend
 
@@ -50,9 +50,14 @@ class VanillGenerator(GenerationBackend):
             **model_kwargs,
         ).eval()
 
+        # if does not exist create a new padding token, 
+        # add it to the tokenizer and resize token embedding accordingly
         if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
+            pad_token = "<PAD>"
+            self.tokenizer.add_special_tokens({"pad_token": pad_token})
+            self.model.resize_token_embeddings(len(self.tokenizer))
+            self.model.config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
+            self.model.generation_config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
 
     def generate(self, prompt: str, max_len: int, **kwargs) -> GenerationResult:
         return self.generate_batch([prompt], max_len=max_len, **kwargs)[0]
@@ -62,7 +67,7 @@ class VanillGenerator(GenerationBackend):
         try:
 
             input_tokens = self.tokenizer(
-                conversation=prompts,
+                prompts,
                 return_tensors="pt",
                 padding=True,
             ).to(self.model.device)
