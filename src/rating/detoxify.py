@@ -36,19 +36,14 @@ class DetoxifyRater(RatingBackend):
         return self.rate_batch([text])[0]
 
     def rate_batch(self, texts: list[str]) -> list[RatingResult]:
-        try:
-            preds = self.forward(texts)
-            keys = list(preds.keys())
-            values = list(preds.values())
+        preds = self.forward(texts)
+        keys = list(preds.keys())
+        values = list(preds.values())
 
-            results = []
-            for i, text in enumerate(texts):
-                scores = {k: v[i] for k, v in zip(keys, values)}
-                rating = RatingResult(text, scores=scores)
-                results.append(rating)
+        results = []
+        for i, text in enumerate(texts):
+            scores = {k: v[i] for k, v in zip(keys, values)}
+            rating = RatingResult(text, scores=scores)
+            results.append(rating)
 
-            return results
-
-        except Exception as e:
-            # Mark all texts with the error if an exception occurs.
-            return [RatingResult(t, error=str(e)) for t in texts]
+        return results

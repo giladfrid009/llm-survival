@@ -17,6 +17,7 @@ dependencies:
     - torch
     - torchvision
     - torchaudio
+    - torch-tensorrt
     - detoxify
     - transformers
     - huggingface_hub

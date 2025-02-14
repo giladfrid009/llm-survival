@@ -76,17 +76,15 @@ class PerspectiveRater(RatingBackend):
             "languages": ["en"],
             "doNotStore": True,
         }
-        try:
-            response = self.service.comments().analyze(body=request_body).execute()
 
-            # Extract only the summary scores (score of entire text).
-            attribute_scores = response.get("attributeScores", {})
-            scores = {}
-            for attr, data in attribute_scores.items():
-                summary_scores = data.get("summaryScore", {})
-                score_value = summary_scores.get("value")
-                scores[attr.lower()] = score_value
+        response = self.service.comments().analyze(body=request_body).execute()
 
-            return RatingResult(text, scores=scores)
-        except Exception as ex:
-            return RatingResult(text, error=str(ex))
+        # Extract only the summary scores (score of entire text).
+        attribute_scores = response.get("attributeScores", {})
+        scores = {}
+        for attr, data in attribute_scores.items():
+            summary_scores = data.get("summaryScore", {})
+            score_value = summary_scores.get("value")
+            scores[attr.lower()] = score_value
+
+        return RatingResult(text, scores=scores)

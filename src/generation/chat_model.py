@@ -8,10 +8,13 @@ class ChatGenerator(GenerationBackend):
     def __init__(
         self,
         model_name: str,
+        max_input_tokens: int = 50,
+        max_new_tokens: int = 50,
         dtype: torch.dtype | str | None = "auto",
         device: str | None = None,
         api_key: str | None = None,
-        **model_kwargs,
+        tokenizer_kwargs: dict = {},
+        model_kwargs: dict = {},
     ):
         """
         Initializes a HuggingFace chat-based model backend for text generation.
@@ -19,6 +22,8 @@ class ChatGenerator(GenerationBackend):
 
         Args:
             model_name (str): The model identifier (or path).
+            max_input_tokens (int): The maximum number of tokens to use as input.
+            max_new_tokens (int): The maximum number of tokens to generate.
             dtype (torch.dtype or str, optional): The data type to use for the model.
                 If 'auto', it will infer dtype from model weights.
                 If None, it will use torch.float32 dtype.
@@ -26,12 +31,15 @@ class ChatGenerator(GenerationBackend):
                 If not provided, it will automatically select 'cuda' if available.
             api_key (str, optional): The HuggingFace API key.
                 If not provided, a pop-up will appear to enter the key.
-            **model_kwargs: Additional keyword arguments passed to the model creation function.
+            tokenizer_kwargs (dict): Additional keyword arguments passed to the tokenizer creation function.
+            model_kwargs (dict): Additional keyword arguments passed to the model creation function.
         """
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.model_name = model_name
+        self.max_input_tokens = max_input_tokens
+        self.max_new_tokens = max_new_tokens
         self.dtype = dtype
         self.device = device
 
@@ -41,6 +49,7 @@ class ChatGenerator(GenerationBackend):
             model_name,
             use_fast=True,
             padding_side="left",
+            **tokenizer_kwargs,
         )
 
         self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
@@ -64,49 +73,38 @@ class ChatGenerator(GenerationBackend):
             self.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
         ]
 
+    def generate(self, prompt: str, **kwargs) -> GenerationResult:
+        return self.generate_batch([prompt] **kwargs)[0]
+
     @torch.inference_mode()
-    def forward(self, inputs: dict, max_len: int, **kwargs) -> torch.Tensor:
-        return self.model.generate(
-            **inputs,
-            max_new_tokens=max_len,
+    def generate_batch(self, prompts: list[str], **kwargs) -> list[GenerationResult]:           
+        messeges = [[{"role": "user", "content": prompt}] for prompt in prompts]
+
+        input_tokens = self.tokenizer.apply_chat_template(
+            conversation=messeges,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            return_dict=True,
+            padding=True,
+            truncation=True,
+            max_length=self.max_input_tokens,
+        ).to(self.device)
+
+        output_tokens = self.model.generate(
+            **input_tokens,
+            max_new_tokens=self.max_new_tokens,
             eos_token_id=self.terminators,
             do_sample=True,
             **kwargs,
         )
 
-    def generate(self, prompt: str, max_len: int, **kwargs) -> GenerationResult:
-        return self.generate_batch([prompt], max_len=max_len, **kwargs)[0]
+        # Decode only newly generated tokens.
+        start_idx = input_tokens["attention_mask"].shape[1]
+        responses = self.tokenizer.batch_decode(
+            sequences=output_tokens[:, start_idx:],
+            skip_special_tokens=True,
+        )
 
-    def generate_batch(self, prompts: list[str], max_len, **kwargs) -> list[GenerationResult]:
-        try:
-            
-            messeges = [[{"role": "user", "content": prompt}] for prompt in prompts]
+        return [GenerationResult(prompt=prompt, output=resp) for prompt, resp in zip(prompts, responses)]
 
-            input_tokens = self.tokenizer.apply_chat_template(
-                conversation=messeges,
-                add_generation_prompt=True,
-                return_tensors="pt",
-                return_dict=True,
-                padding=True,
-            ).to(self.device)
-
-            output_tokens = self.model.generate(
-                **input_tokens,
-                max_new_tokens=max_len,
-                eos_token_id=self.terminators,
-                do_sample=True,
-                **kwargs,
-            )
-
-            # Decode only newly generated tokens.
-            start_idx = input_tokens["attention_mask"].shape[1]
-            responses = self.tokenizer.batch_decode(
-                sequences=output_tokens[:, start_idx:],
-                skip_special_tokens=True,
-            )
-
-            return [GenerationResult(prompt=prompt, output=resp) for prompt, resp in zip(prompts, responses)]
-
-        except Exception as e:
-            # In case of any error during generation, capture the error message.
-            return [GenerationResult(prompt=prompt, error=str(e)) for prompt in prompts]
+        

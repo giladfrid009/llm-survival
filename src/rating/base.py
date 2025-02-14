@@ -12,18 +12,12 @@ class RatingResult:
     Represents the rating result for a single text.
 
     Attributes:
-        text (str, optional): The input text.
-        scores (dict[str, float], optional): The computed score per attribute,
-            or None if an error occurred.
-        error (str, optional): An error message if rating failed.
+        text (str): The input text.
+        scores (dict[str, float]): The computed score per attribute.
     """
 
-    text: str = ""
-    scores: dict[str, float] | None = None
-    error: str | None = None
-
-    def is_valid(self) -> bool:
-        return self.scores is not None and self.error is None
+    text: str
+    scores: dict[str, float]
 
 
 class RatingBackend(ABC):

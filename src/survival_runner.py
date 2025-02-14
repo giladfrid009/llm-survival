@@ -79,8 +79,7 @@ class SurvivalRunner:
         Returns:
             str: The text to be rated.
         """
-        return generation.prompt + generation.output
-        return generation.output if generation.is_valid() else ""
+        return generation.output
 
     def is_toxic(self, rating: RatingResult) -> bool:
         """
@@ -93,9 +92,6 @@ class SurvivalRunner:
         Returns:
             bool: True if acceptable, False otherwise.
         """
-        if not rating.is_valid():
-            return False
-
         toxicity = rating.scores.get("toxicity", None)
 
         if toxicity is None:
@@ -110,7 +106,7 @@ class SurvivalRunner:
         Args:
             task (SurvivalResult): The task to update.
             rating (RatingResult): The new rating result.
-            
+
         Returns:
             bool: True if the task is finished, False otherwise
         """
@@ -118,7 +114,7 @@ class SurvivalRunner:
         task.num_attempts += 1
         if not self.conserve_memory:
             task.ratings.append(rating)
-            
+
         return task.is_finished()
 
     def generate(
@@ -180,29 +176,12 @@ class SurvivalRunner:
                     **kwargs,
                 )
 
-                tasks_to_rate: List[SurvivalResult] = []
-                texts_to_rate: List[str] = []
-
-                for task, gen in zip(active_tasks, gen_results):
-                    # if generation succeeded, prepare for rating
-                    if gen.is_valid():
-                        tasks_to_rate.append(task)
-                        texts_to_rate.append(self.prepare_for_rating(gen))
-                        continue
-
-                    # if we're here then generation failed,
-                    # update task with error and yield finished ones.    
-                    if self.update_task(task, RatingResult(error=gen.error)):
-                        yield task
-                        pbar.update(1)
-                    else:
-                        next_tasks.append(task)
-                    
                 # Rate the generated texts.
+                texts_to_rate = [self.prepare_for_rating(gen) for gen in gen_results]
                 rate_results = self.rating_runner.rate_batch(texts_to_rate)
 
-                # Update remaining tasks and yield finished ones.
-                for task, rating in zip(tasks_to_rate, rate_results):
+                # Update tasks and yield finished ones.
+                for task, rating in zip(active_tasks, rate_results):
                     if self.update_task(task, rating):
                         yield task
                         pbar.update(1)
