@@ -14,9 +14,9 @@ class DetoxifyRater(RatingBackend):
         Initializes the Detoxify model.
 
         Args:
-            model_type (str): Specifies which Detoxify model to load. Defaults to "original".
+            model_type (str): Specifies which Detoxify model to load.
             device (str, optional): The device to run the model on ("cpu" or "cuda"). If None, uses "cuda" if available.
-            amp (bool): Whether to use automatic mixed precision. Defaults to False.
+            amp (bool): Whether to use automatic mixed precision. 
         """
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"

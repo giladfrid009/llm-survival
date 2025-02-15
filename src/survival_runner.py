@@ -142,7 +142,7 @@ class SurvivalRunner:
 
         Args:
             prompts (Iterable[str]): An iterable of prompt strings.
-            batch_size (int, optional): Number of prompts to process concurrently. Defaults to 10.
+            batch_size (int, optional): Number of prompts to process concurrently.
             **kwargs: Additional keyword arguments passed to the generation backend.
 
         Yields:

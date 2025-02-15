@@ -102,7 +102,7 @@ class RatingRunner:
 
         Args:
             texts (Iterable[str]): An iterable of text strings to be rated.
-            batch_size (int, optional): Number of texts to process in each batch. Defaults to 100.
+            batch_size (int, optional): Number of texts to process in each batch.
             **kwargs: Additional keyword arguments for the rating backend.
 
         Yields:
