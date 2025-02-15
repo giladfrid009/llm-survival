@@ -39,7 +39,7 @@ class VanillaGenerator(GenerationBackend):
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             use_fast=True,
-            padding_side="left",
+            padding_side=kwargs.pop("padding_side", "left"),
             token=hub_token,
         )
 
