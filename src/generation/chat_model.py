@@ -12,7 +12,7 @@ class ChatGenerator(VanillaGenerator):
         self,
         model_name: str,
         hub_token: str,
-        max_input_tokens: int = 128,
+        max_input_tokens: int = 50,
         max_output_tokens: int = 50,
         device: str | None = None,
         **kwargs,
@@ -36,9 +36,9 @@ class ChatGenerator(VanillaGenerator):
         messeges = [[{"role": "user", "content": t}] for t in text]
         return self.tokenizer.apply_chat_template(
             conversation=messeges,
-            add_generation_prompt=True,
             return_tensors="pt",
             return_dict=True,
+            add_generation_prompt=kwargs.pop("add_generation_prompt", True),
             padding=kwargs.pop("padding", True),
             truncation=kwargs.pop("truncation", True),
             max_length=self.max_input_tokens,

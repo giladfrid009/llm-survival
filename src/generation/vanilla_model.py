@@ -52,12 +52,24 @@ class VanillaGenerator(GenerationBackend):
 
         # if does not exist create a new padding token,
         # add it to the tokenizer and resize token embedding accordingly
+        
+        # TODO: WTF IT ACTUALLY CHANGES MODEL'S BEHAVIOR, FOR LLAMA GUARD FOR SURE, 
+        # NEED TO VERIFY WHICH VARIANT IS THE CORRECT ONE.
+        # MAYBE LLAMA GUARD DOESNT WORK PROPERLY WITH ATTENTION MASK???
+        # TODO: CHECK FOR THE REST OF THE MODELS IF THEIR BEHAVIOR CHANGES AS WELL
+        
         if self.tokenizer.pad_token is None:
             pad_token = "<PAD>"
             self.tokenizer.add_special_tokens({"pad_token": pad_token})
             self.model.resize_token_embeddings(len(self.tokenizer))
             self.model.config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
             self.model.generation_config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
+        
+        # if self.tokenizer.pad_token is None and self.tokenizer.eos_token is not None:
+        #     self.tokenizer.pad_token = self.tokenizer.eos_token
+        #     pad_token_id = self.tokenizer.convert_tokens_to_ids(self.tokenizer.pad_token)
+        #     self.model.config.pad_token_id = pad_token_id
+        #     self.model.generation_config.pad_token_id = pad_token_id
 
     def tokenize(self, text: list[str], kwargs: dict = {}) -> BatchEncoding:
         return self.tokenizer(

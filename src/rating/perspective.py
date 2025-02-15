@@ -64,7 +64,7 @@ class PerspectiveRater(RatingBackend):
                 time.sleep(min_interval - elapsed)
             self._last_request_time = time.time()
 
-    def rate(self, text: str) -> RatingResult:
+    def rate(self, text: str, **kwargs) -> RatingResult:
 
         self._enforce_rate_limit()
 

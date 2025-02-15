@@ -32,10 +32,10 @@ class DetoxifyRater(RatingBackend):
         else:
             return self.model.predict(texts)
 
-    def rate(self, text: str) -> RatingResult:
-        return self.rate_batch([text])[0]
+    def rate(self, text: str, **kwargs) -> RatingResult:
+        return self.rate_batch([text], **kwargs)[0]
 
-    def rate_batch(self, texts: list[str]) -> list[RatingResult]:
+    def rate_batch(self, texts: list[str], **kwargs) -> list[RatingResult]:
         preds = self.forward(texts)
         keys = list(preds.keys())
         values = list(preds.values())
