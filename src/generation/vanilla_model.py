@@ -13,8 +13,6 @@ class VanillGenerator(GenerationBackend):
         dtype: torch.dtype | str | None = "auto",
         device: str | None = None,
         api_key: str | None = None,
-        tokenizer_kwargs: dict = {},
-        model_kwargs: dict = {},
     ):
         """
         Initializes a HuggingFace vanilla non-tuned model backend for text generation.
@@ -31,8 +29,6 @@ class VanillGenerator(GenerationBackend):
                 If not provided, it will automatically select 'cuda' if available.
             api_key (str, optional): The HuggingFace API key.
                 If not provided, a pop-up will appear to enter the key.
-            tokenizer_kwargs (dict): Additional keyword arguments passed to the tokenizer creation function.
-            model_kwargs (dict): Additional keyword arguments passed to the model creation function.
         """
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -49,14 +45,12 @@ class VanillGenerator(GenerationBackend):
             model_name,
             use_fast=True,
             padding_side="left",
-            **tokenizer_kwargs,
         )
 
         self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=dtype,
             device_map=self.device,
-            **model_kwargs,
         ).eval()
 
         # if does not exist create a new padding token,
@@ -77,8 +71,8 @@ class VanillGenerator(GenerationBackend):
         input_tokens = self.tokenizer(
             prompts,
             return_tensors="pt",
-            padding=True,
-            truncation=True,
+            padding=kwargs.pop("padding", True),
+            truncation=kwargs.pop("truncation", True),
             max_length=self.max_input_tokens,
         ).to(self.model.device)
 

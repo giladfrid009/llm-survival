@@ -120,7 +120,6 @@ class SurvivalRunner:
     def generate(
         self,
         prompts: Iterable[str],
-        max_len: int = 50,
         batch_size: int = 10,
         **kwargs: Any,
     ) -> Iterator[SurvivalResult]:
@@ -131,7 +130,6 @@ class SurvivalRunner:
 
         Args:
             prompts (Iterable[str]): An iterable of prompt strings.
-            max_len (int, optional): Maximum length for generated text. Defaults to 50.
             batch_size (int, optional): Number of prompts to process concurrently. Defaults to 10.
             **kwargs: Additional keyword arguments passed to the generation backend.
 
@@ -172,7 +170,6 @@ class SurvivalRunner:
                 # Generate output text for all active tasks.
                 gen_results = self.generation_runner.generate_batch(
                     prompts=[task.prompt for task in active_tasks],
-                    max_len=max_len,
                     **kwargs,
                 )
 
