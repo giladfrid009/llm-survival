@@ -1,56 +1,53 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
-import huggingface_hub
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, BatchEncoding
 from src.generation.base import GenerationResult, GenerationBackend
 
 
-class VanillGenerator(GenerationBackend):
+class VanillaGenerator(GenerationBackend):
+    """
+    Vanilla generation backend using a Hugging Face model.
+    These models are trained for pure next-token generation, and not for conversational or chat-like responses.
+    """
+    
     def __init__(
         self,
         model_name: str,
+        hub_token: str,
         max_input_tokens: int = 50,
-        max_new_tokens: int = 50,
-        dtype: torch.dtype | str | None = "auto",
+        max_output_tokens: int = 50,
         device: str | None = None,
-        api_key: str | None = None,
+        **kwargs,
     ):
         """
-        Initializes a HuggingFace vanilla non-tuned model backend for text generation.
-        These model types are intended for sentance completion, and not for chatbot-like interactions.
-
         Args:
             model_name (str): The model identifier (or path).
+            hub_token (str): The HuggingFace API token.
             max_input_tokens (int): The maximum number of tokens to use as input.
-            max_new_tokens (int): The maximum number of tokens to generate.
-            dtype (torch.dtype or str, optional): The data type to use for the model.
-                If 'auto', it will infer dtype from model weights.
-                If None, it will use torch.float32 dtype.
+            max_output_tokens (int): The maximum number of new tokens to generate.
             device (str, optional): Device to run the model on ('cpu' or 'cuda').
                 If not provided, it will automatically select 'cuda' if available.
-            api_key (str, optional): The HuggingFace API key.
-                If not provided, a pop-up will appear to enter the key.
+            **kwargs: Additional keyword arguments passed to the model initialization.
         """
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.model_name = model_name
         self.max_input_tokens = max_input_tokens
-        self.max_new_tokens = max_new_tokens
-        self.dtype = dtype
+        self.max_new_tokens = max_output_tokens
         self.device = device
-
-        huggingface_hub.login(token=api_key)
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             use_fast=True,
             padding_side="left",
+            token=hub_token,
         )
 
         self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=dtype,
             device_map=self.device,
+            token=hub_token,
+            **kwargs,
         ).eval()
 
         # if does not exist create a new padding token,
@@ -62,26 +59,31 @@ class VanillGenerator(GenerationBackend):
             self.model.config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
             self.model.generation_config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
 
+    def tokenize(self, text: list[str], **kwargs) -> BatchEncoding:
+        return self.tokenizer(
+            text,
+            return_tensors="pt",
+            padding=kwargs.pop("padding", True),
+            truncation=kwargs.pop("truncation", True),
+            max_length=self.max_input_tokens,
+        )
+
+    def forward(self, input_tokens: BatchEncoding, **kwargs) -> torch.Tensor:
+        return self.model.generate(
+            **input_tokens,
+            max_new_tokens=self.max_new_tokens,
+            do_sample=True,
+            **kwargs,
+        )
+
     def generate(self, prompt: str, **kwargs) -> GenerationResult:
         return self.generate_batch([prompt], **kwargs)[0]
 
     @torch.inference_mode()
     def generate_batch(self, prompts: list[str], **kwargs) -> list[GenerationResult]:
 
-        input_tokens = self.tokenizer(
-            prompts,
-            return_tensors="pt",
-            padding=kwargs.pop("padding", True),
-            truncation=kwargs.pop("truncation", True),
-            max_length=self.max_input_tokens,
-        ).to(self.model.device)
-
-        output_tokens = self.model.generate(
-            **input_tokens,
-            max_new_tokens=self.max_new_tokens,
-            do_sample=True,
-            **kwargs,
-        )
+        input_tokens = self.tokenize(prompts, **kwargs).to(self.model.device)
+        output_tokens = self.forward(input_tokens, **kwargs)
 
         # Decode only newly generated tokens.
         start_idx = input_tokens["attention_mask"].shape[1]

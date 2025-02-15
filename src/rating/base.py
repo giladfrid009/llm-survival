@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from tqdm.auto import tqdm
 from src.utils import batchify
@@ -92,7 +92,7 @@ class RatingRunner:
             return []
         return self.backend.rate_batch(texts)
 
-    def rate_stram(self, texts: Iterable[str], batch_size: int = 100) -> Iterable[RatingResult]:
+    def rate_stram(self, texts: Iterable[str], batch_size: int = 100) -> Iterator[RatingResult]:
         """
         Rate a stream of text strings by processing them in batches.
 
@@ -107,7 +107,7 @@ class RatingRunner:
         for batch in tqdm(batches, desc="Rating", unit="batch"):
             yield from self.rate_batch(batch)
 
-    def rate_stream_batched(self, texts: Iterable[Iterable[str]]) -> Iterable[list[RatingResult]]:
+    def rate_stream_batched(self, texts: Iterable[Iterable[str]]) -> Iterator[list[RatingResult]]:
         """
         Rate a stream of batched texts.
         This method processes an iterable containing batches of text strings. Each batch is

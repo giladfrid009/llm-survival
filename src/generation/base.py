@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from tqdm.auto import tqdm
-from typing import Iterable
+from dataclasses import dataclass
+from typing import Iterable, Iterator
 
+from tqdm.auto import tqdm
 from src.utils import batchify
 
 
@@ -97,7 +97,7 @@ class GenerationRunner:
         prompts: Iterable[str],
         batch_size: int = 1,
         **kwargs,
-    ) -> Iterable[GenerationResult]:
+    ) -> Iterator[GenerationResult]:
         """
         Generate outputs for an entire stream of prompts.
 
@@ -117,7 +117,7 @@ class GenerationRunner:
         self,
         prompts: Iterable[str],
         **kwargs,
-    ) -> Iterable[list[GenerationResult]]:
+    ) -> Iterator[list[GenerationResult]]:
         """
         Generate outputs for an entire stream of prompts in batches.
 
