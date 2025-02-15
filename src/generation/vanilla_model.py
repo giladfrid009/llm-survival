@@ -59,7 +59,7 @@ class VanillaGenerator(GenerationBackend):
             self.model.config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
             self.model.generation_config.pad_token_id = self.tokenizer.convert_tokens_to_ids(pad_token)
 
-    def tokenize(self, text: list[str], **kwargs) -> BatchEncoding:
+    def tokenize(self, text: list[str], kwargs: dict = {}) -> BatchEncoding:
         return self.tokenizer(
             text,
             return_tensors="pt",
@@ -68,7 +68,7 @@ class VanillaGenerator(GenerationBackend):
             max_length=self.max_input_tokens,
         )
 
-    def forward(self, input_tokens: BatchEncoding, **kwargs) -> torch.Tensor:
+    def forward(self, input_tokens: BatchEncoding, kwargs: dict = {}) -> torch.Tensor:
         return self.model.generate(
             **input_tokens,
             max_new_tokens=self.max_new_tokens,
@@ -82,8 +82,8 @@ class VanillaGenerator(GenerationBackend):
     @torch.inference_mode()
     def generate_batch(self, prompts: list[str], **kwargs) -> list[GenerationResult]:
 
-        input_tokens = self.tokenize(prompts, **kwargs).to(self.model.device)
-        output_tokens = self.forward(input_tokens, **kwargs)
+        input_tokens = self.tokenize(prompts, kwargs).to(self.model.device)
+        output_tokens = self.forward(input_tokens, kwargs)
 
         # Decode only newly generated tokens.
         start_idx = input_tokens["attention_mask"].shape[1]

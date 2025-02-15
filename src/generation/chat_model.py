@@ -32,7 +32,7 @@ class ChatGenerator(VanillaGenerator):
             self.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
         ]
 
-    def tokenize(self, text: list[str], **kwargs) -> BatchEncoding:
+    def tokenize(self, text: list[str], kwargs: dict = {}) -> BatchEncoding:
         messeges = [[{"role": "user", "content": t}] for t in text]
         return self.tokenizer.apply_chat_template(
             conversation=messeges,
@@ -44,7 +44,7 @@ class ChatGenerator(VanillaGenerator):
             max_length=self.max_input_tokens,
         )
 
-    def forward(self, input_tokens: BatchEncoding, **kwargs) -> torch.Tensor:
+    def forward(self, input_tokens: BatchEncoding, kwargs: dict = {}) -> torch.Tensor:
         return self.model.generate(
             **input_tokens,
             max_new_tokens=self.max_new_tokens,
