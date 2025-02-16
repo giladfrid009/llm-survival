@@ -53,7 +53,7 @@ class RatingBackend(ABC):
         Returns:
             list[RatingResult]: The results for each text.
         """
-        return [self.rate(text, kwargs) for text in texts]
+        return [self.rate(text, **kwargs) for text in texts]
 
 
 class RatingRunner:
