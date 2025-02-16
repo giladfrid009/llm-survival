@@ -8,6 +8,7 @@ class ChatGenerator(VanillaGenerator):
     Chat generation backend using a Hugging Face model.
     These models are trained for conversational or chat-like responses (like chat-GPT).
     """
+
     def __init__(
         self,
         model_name: str,
@@ -41,7 +42,7 @@ class ChatGenerator(VanillaGenerator):
             add_generation_prompt=kwargs.pop("add_generation_prompt", True),
             padding=kwargs.pop("padding", True),
             truncation=kwargs.pop("truncation", True),
-            max_length=self.max_input_tokens,
+            max_length=kwargs.pop("max_length", self.max_input_tokens + self.empty_input_tokens),
         )
 
     def forward(self, input_tokens: BatchEncoding, kwargs: dict = {}) -> torch.Tensor:
@@ -49,6 +50,6 @@ class ChatGenerator(VanillaGenerator):
             **input_tokens,
             max_new_tokens=self.max_new_tokens,
             eos_token_id=self.terminators,
-            do_sample=True,
+            do_sample=kwargs.pop("do_sample", True),
             **kwargs,
         )
