@@ -9,6 +9,54 @@ import gc
 T = TypeVar("T")
 
 
+from collections import deque
+
+
+class RunningAverage:
+    """
+    Running average calculator. Supports both standard and windowed running averages.
+    """
+    def __init__(self, window_size: int = None):
+        """
+        Args:
+            window_size (int, optional): The size of the window for a fixed-size running average.
+        """
+        
+        self.total = 0.0
+        self.count = 0
+        self.window_size = window_size
+        self.values = deque(maxlen=window_size) if window_size else None
+
+    def update(self, value: float, count: int = 1):
+        """
+        Updates the running average with a new value.
+
+        Args:
+            value (float): The new value to add.
+            count (int): The number of times to add the value (default: 1).
+        """
+        if self.window_size:
+            # If using a fixed window, maintain a deque
+            for _ in range(count):
+                if len(self.values) == self.window_size:
+                    self.total -= self.values.popleft()  # Remove oldest value from total
+                self.values.append(value)  # Add new value
+                self.total += value
+            self.count = len(self.values)
+        else:
+            # Standard running average without a window size
+            self.total += value * count
+            self.count += count
+
+    def __float__(self) -> float:
+        """Returns the current average as a float."""
+        return self.total / self.count if self.count > 0 else 0.0
+
+    def __str__(self) -> str:
+        """Returns the average as a string."""
+        return str(float(self))
+
+
 class Batchifier(Generic[T]):
     def __init__(self, data: Iterable[T], batch_size: int):
         assert batch_size > 0, "batch_size must be > 0"
@@ -74,6 +122,7 @@ def clear_memory() -> None:
     """
     gc.collect()
     torch.cuda.empty_cache()
+    gc.collect()
 
 
 def api_key_from_file(path: str) -> str:

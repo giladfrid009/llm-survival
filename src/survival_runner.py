@@ -1,7 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Iterable, Iterator, Callable
+import time
+import math
+import datetime
 
 from tqdm.auto import tqdm
+from src.utils import RunningAverage
 from src.generation.base import GenerationBackend, GenerationResult, GenerationRunner
 from src.rating.base import RatingBackend, RatingResult, RatingRunner
 
@@ -172,10 +176,13 @@ class SurvivalRunner:
 
         fill_tasks()
 
-        total = len(prompts) if hasattr(prompts, "__len__") else None
-        with tqdm(total=total, desc="Processing Prompts") as pbar:
+        batch_time = RunningAverage(window_size=10)
+        total_length = len(prompts) if hasattr(prompts, "__len__") else None
+        with tqdm(total=total_length, desc="Processing Prompts") as pbar:
 
             while active_tasks:
+
+                start_time = time.time()
 
                 # Batch of tasks for the next iteration.
                 next_tasks: list[SurvivalResult] = []
@@ -199,5 +206,20 @@ class SurvivalRunner:
                     else:
                         next_tasks.append(task)
 
+                # prepare for next iteration
                 active_tasks = next_tasks
                 fill_tasks()
+
+                # update pbar metrics
+                batch_time.update(time.time() - start_time)
+                metrics = {
+                    "batch_num": f"{batch_time.count}",
+                    "batch_time": f"{float(batch_time):.2f}",
+                }
+
+                if total_length is not None:
+                    items_left = total_length - pbar.n
+                    seconds_left = float(batch_time) * (items_left / batch_size) * self.max_attempts
+                    metrics.update({"time_remaining": datetime.timedelta(seconds=int(seconds_left))})
+
+                pbar.set_postfix(metrics)
