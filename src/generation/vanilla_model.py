@@ -55,7 +55,7 @@ class VanillaGenerator(GenerationBackend):
         # Set parameters.
         self.model_name = model_name
         self.max_input_tokens = max_input_tokens
-        self.max_new_tokens = max_output_tokens
+        self.max_output_tokens = max_output_tokens
         self.device = device
         self.model = model
         self.tokenizer = tokenizer
@@ -84,7 +84,7 @@ class VanillaGenerator(GenerationBackend):
     def forward(self, input_tokens: BatchEncoding, kwargs: dict = {}) -> torch.Tensor:
         return self.model.generate(
             **input_tokens,
-            max_new_tokens=self.max_new_tokens,
+            max_new_tokens=self.max_output_tokens,
             do_sample=kwargs.pop("do_sample", True),
             **kwargs,
         )

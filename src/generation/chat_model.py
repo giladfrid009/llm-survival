@@ -48,7 +48,7 @@ class ChatGenerator(VanillaGenerator):
     def forward(self, input_tokens: BatchEncoding, kwargs: dict = {}) -> torch.Tensor:
         return self.model.generate(
             **input_tokens,
-            max_new_tokens=self.max_new_tokens,
+            max_new_tokens=self.max_output_tokens,
             eos_token_id=self.terminators,
             do_sample=kwargs.pop("do_sample", True),
             **kwargs,
