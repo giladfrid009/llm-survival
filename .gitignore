@@ -3,6 +3,7 @@ HF_KEY.txt
 data
 survival_results.pkl
 .vscode
+saved
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

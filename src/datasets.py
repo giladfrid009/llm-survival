@@ -79,7 +79,10 @@ class BaseDataset(Dataset, ABC):
 
     def __getitem__(self, idx):
         unfiltered_result = self.data[idx]
-        return self.transform(unfiltered_result)
+        transformed = self.transform(unfiltered_result)
+        x = transformed[0]
+        y = transformed[1:] if len(transformed) > 2 else transformed[1]
+        return x, y
 
     @abstractmethod
     def transform(self, unfiltered_result):
@@ -121,4 +124,7 @@ class MultiSampleDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        return self.samples[idx]
+        sample = self.samples[idx]
+        x = sample[0]
+        y = sample[1:] if len(sample) > 2 else sample[1]
+        return x, y
