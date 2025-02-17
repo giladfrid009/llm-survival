@@ -30,17 +30,6 @@ rater_backend = DetoxifyRater(
 )
 
 # %%
-# from src.rating.llama_guard import LlamaGuardRater
-# import torch
-
-# rater_backend = LlamaGuardRater(
-#     model_name="meta-llama/Llama-Guard-3-1B",
-#     hub_token=hf_key,
-#     max_input_tokens=100,
-#     torch_dtype=torch.bfloat16,
-# )
-
-# %%
 from src.generation.vanilla_model import VanillaGenerator
 
 generator_backend = VanillaGenerator(
@@ -51,17 +40,6 @@ generator_backend = VanillaGenerator(
     torch_dtype=torch.bfloat16,
     # attn_implementation="flash_attention_2",
 )
-
-# %%
-# from src.generation.chat_model import ChatGenerator
-
-# generator_backend = ChatGenerator(
-#     model_name="meta-llama/Llama-3.2-1B-Instruct",
-#     hub_token=hf_key,
-#     max_input_tokens=40,
-#     max_output_tokens=30,
-#     torch_dtype=torch.bfloat16,
-# )
 
 # %%
 # create survival analysis runner
