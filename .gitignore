@@ -1,7 +1,8 @@
 PERSPECTIVE_API_KEY.txt
 HF_KEY.txt
 data
-
+survival_results.pkl
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
