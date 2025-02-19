@@ -11,7 +11,13 @@ argparser.add_argument('--data_path', type=str, required=True, help="Path to the
 argparser.add_argument('--seed', type=int, required=True, help="Random seed for shuffling.")
 argparser.add_argument('--proportions', type=str, required=True,
                        help="Comma-separated list of proportions for the split (e.g., 0.7,0.1,0.1,0.1).")
+argparser.add_argument('--take_first_N', type=int, default=None, help="Take the first N samples from the data.")
+argparser.add_argument('--take_last_N', type=int, default=None, help="Take the last N samples from the data.")
 args = argparser.parse_args()
+
+# Assert that take_first_N and take_last_N are not both provided.
+if args.take_first_N is not None and args.take_last_N is not None:
+    sys.exit("Only one of take_first_N and take_last_N can be provided.")
 
 data_path = args.data_path
 seed = args.seed
@@ -29,6 +35,14 @@ random.seed(seed)
 # Load the data (assumed to be a pickled list)
 with open(data_path, "rb") as f:
     data = pkl.load(f)
+
+# Optionally take the first N samples.
+if args.take_first_N is not None:
+    data = data[:args.take_first_N]
+
+# Optionally take the last N samples.
+if args.take_last_N is not None:
+    data = data[-args.take_last_N:]
 
 n = len(data)
 indices = list(range(n))
@@ -53,7 +67,12 @@ split_indices.append(indices[prev:])  # The last split takes the remainder.
 data_dir = os.path.dirname(data_path)
 # Replace commas with underscores in the proportions string for a valid folder name.
 proportions_str = args.proportions.replace(",", "_")
-split_folder = os.path.join(data_dir, f"split_{seed}_{proportions_str}")
+first_last_postfix = ""
+if args.take_first_N is not None:
+    first_last_postfix = f"first_{args.take_first_N}"
+if args.take_last_N is not None:
+    first_last_postfix = f"last_{args.take_last_N}"
+split_folder = os.path.join(data_dir, f"split_{seed}_{proportions_str}_{first_last_postfix}")
 os.makedirs(split_folder, exist_ok=True)
 
 # Define split names.
