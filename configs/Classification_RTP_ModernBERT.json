@@ -18,7 +18,7 @@
             "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2/train.pkl"
         },
         "val": {
-            "type": "ClassificationDataset",
+            "type": "PropDataset",
             "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2/val.pkl"
         },
         "cal": {
@@ -37,7 +37,7 @@
     "optimizer": {
         "type": "Adam",
         "args": {
-            "lr": 1e-5,
+            "lr": 3e-5,
             "weight_decay": 3e-6,
             "amsgrad": true
         }

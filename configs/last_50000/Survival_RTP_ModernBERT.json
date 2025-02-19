@@ -15,19 +15,19 @@
     "dataset": {
         "train": {
             "type": "SurvivalDataset",
-            "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2/train.pkl"
+            "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2_first_50000/train.pkl"
         },
         "val": {
             "type": "PropDataset",
-            "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2/val.pkl"
+            "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2_first_50000/val.pkl"
         },
         "cal": {
             "type": "ClassificationDataset",
-            "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2/cal.pkl"
+            "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2_first_50000/cal.pkl"
         },
         "test": {
             "type": "ClassificationDataset",
-            "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2/test.pkl"
+            "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2_first_50000/test.pkl"
         },
         "args": {
             "score_name": "toxicity",

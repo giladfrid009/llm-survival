@@ -1,8 +1,8 @@
 {
-    "name": "Survival_RTP_ModernBERT",
+    "name": "Prop_RTP_ModernBERT",
     "batch_size": 500,
     "accumulate_grad_batches": 1,
-    "loss": "survival_loss",
+    "loss": "prop_loss",
     "arch": {
         "type": "ModernBERT",
         "args": {
@@ -14,7 +14,7 @@
     },
     "dataset": {
         "train": {
-            "type": "SurvivalDataset",
+            "type": "PropDataset",
             "pkl_path": "data/rtp/split_1_0.5_0.1_0.2_0.2/train.pkl"
         },
         "val": {
