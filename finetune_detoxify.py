@@ -5,13 +5,14 @@ from math import ceil
 import os
 from typing import Literal
 import transformers
+from torch import sigmoid
 
 # Disable tokenizer parallelism to avoid deadlocks due to forking
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import pytorch_lightning as pl
 from src import datasets
-from src.loss import survival_loss
+from src.loss import survival_loss, prop_loss
 import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.nn import functional as F
@@ -62,23 +63,25 @@ class ToxicClassifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, meta = batch
         output = self.forward(x)
-        ce = self.binary_cross_entropy(output, meta)
-        acc = self.binary_accuracy(output, meta)
+        ce = self.binary_cross_entropy(output, meta[0])
+        # acc = self.binary_accuracy(output, meta)
+        variance = torch.var(output[:,1])
         
-        preds = output[:, 1]  
-        targets = meta.int().to(preds.device)
-        self.auroc.update(preds, targets)
+        # preds = output[:, 1]  
+        # targets = meta.int().to(preds.device)
+        # self.auroc.update(torch.sigmoid(preds), targets)
 
         self.log("val_ce", ce, prog_bar=True)
-        self.log("val_acc", acc)
-        return {"ce": ce, "acc": acc}
+        # self.log("val_acc", acc)
+        self.log("variance", variance, prog_bar=True)
+        return {"ce": ce}
     
-    def on_validation_epoch_end(self):
-        # Compute the AUROC over the validation epoch
-        auroc_value = self.auroc.compute()
-        self.log('val_auroc', auroc_value, prog_bar=True)
-        # Reset the metric for the next epoch
-        self.auroc.reset()
+    # def on_validation_epoch_end(self):
+    #     # Compute the AUROC over the validation epoch
+    #     auroc_value = self.auroc.compute()
+    #     self.log('val_auroc', auroc_value, prog_bar=True)
+    #     # Reset the metric for the next epoch
+    #     self.auroc.reset()
 
     def test_step(self, batch, batch_idx):
         x, meta = batch
@@ -106,6 +109,9 @@ class ToxicClassifier(pl.LightningModule):
 
     def survival_loss(self, input, meta):
         return survival_loss(input, meta)
+    
+    def prop_loss(self, input, meta):
+        return prop_loss(input, meta)
 
     def binary_accuracy(self, output, meta):
         """Custom binary_accuracy function.
