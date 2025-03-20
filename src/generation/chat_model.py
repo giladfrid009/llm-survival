@@ -34,12 +34,24 @@ class ChatGenerator(VanillaGenerator):
         ]
 
     def tokenize(self, text: list[str], kwargs: dict = {}) -> BatchEncoding:
-        messeges = [[{"role": "user", "content": t}] for t in text]
-        return self.tokenizer.apply_chat_template(
-            conversation=messeges,
+        # Create a conversation structure for each text input
+        messages = [[{"role": "user", "content": t}] for t in text]
+        add_generation_prompt = kwargs.pop("add_generation_prompt", True)
+        inputs = []
+        for conversation in messages:
+            # Build a string from the conversation messages.
+            conversation_str = ""
+            for message in conversation:
+                # You can adjust this formatting as needed by your model.
+                conversation_str += f"{message['role']}: {message['content']}\n"
+            if add_generation_prompt:
+                # Append a prompt marker (modify as appropriate for your use case).
+                conversation_str += "Assistant:"
+            inputs.append(conversation_str.strip())
+
+        return self.tokenizer(
+            inputs,
             return_tensors="pt",
-            return_dict=True,
-            add_generation_prompt=kwargs.pop("add_generation_prompt", True),
             padding=kwargs.pop("padding", True),
             truncation=kwargs.pop("truncation", True),
             max_length=kwargs.pop("max_length", self.max_input_tokens + self.empty_input_tokens),
