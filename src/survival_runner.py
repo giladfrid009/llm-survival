@@ -45,6 +45,19 @@ def default_text_prep_func(generation: GenerationResult) -> str:
     """
     return generation.output
 
+def sentence_completion_text_prep_func(generation: GenerationResult) -> str:
+    """
+    Default text preparation function for rating.
+    Returns the output text from the generation backend.
+
+    Args:
+        generation (GenerationResult): The result from the generation backend.
+
+    Returns:
+        str: The text to be rated.
+    """
+    return generation.prompt + generation.output
+
 
 def default_toxicity_func(
     rating: RatingResult,
@@ -93,7 +106,7 @@ class SurvivalRunner:
         Args:
             generator (GenerationBackend): The backend used for text generation.
             rater (RatingBackend): The backend used for rating outputs.
-            max_attempts (int): Maximum generation attempts per prompt.
+            max_attempts (int or torch.Tensor): Maximum number of attempts allowed for each prompt.
             toxicity_func (Callable[[RatingResult], bool], optional): Toxicity test function.
             text_prep_func (Callable[[GenerationResult], str], optional): Text preparation function for rating.
             conserve_memory (bool): Whether to avoid storing different attributes in the `SurvivalResult`.
@@ -167,7 +180,7 @@ class SurvivalRunner:
                 new_task = SurvivalResult(
                     id=self.current_task_id,
                     prompt=prompt,
-                    max_attempts=self.max_attempts,
+                    max_attempts=self.max_attempts if isinstance(self.max_attempts, int) else self.max_attempts[self.current_task_id],
                     num_attempts=0,
                 )
 
@@ -219,7 +232,7 @@ class SurvivalRunner:
 
                 if total_length is not None:
                     items_left = total_length - pbar.n
-                    seconds_left = float(batch_time) * (items_left / batch_size) * self.max_attempts
+                    seconds_left = float(batch_time) * (items_left / batch_size) * (self.max_attempts if isinstance(self.max_attempts, int) else self.max_attempts.mean())
                     metrics.update({"time_remaining": datetime.timedelta(seconds=int(seconds_left))})
 
                 pbar.set_postfix(metrics)

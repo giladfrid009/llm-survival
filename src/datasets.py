@@ -137,3 +137,14 @@ class MultiSampleDataset(Dataset):
         x = sample[0]
         y = sample[1:] if len(sample) > 2 else sample[1]
         return x, y
+
+class PromptOnlyDataset(Dataset):
+    def __init__(self, pkl_file: str):
+        with open(pkl_file, "rb") as f:
+            self.data = pickle.load(f)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx].prompt
