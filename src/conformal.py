@@ -77,15 +77,20 @@ def conformalize(trainer, model, target_taus, canidate_taus, X, generation_backe
 
     # Resample the calibration set
     T_tilde, C = resample_calibration_set(generation_backend, rating_backend, prior_quantile_est, C_probs, X, toxicity_func=toxicity_func, text_prep_func=text_prep_func, batch_size=batch_size)
+    print(f"Total budget used per sample is {C.mean()}")
 
     # Compute the weights - 1/conditional_probability
     weights = 1 / C_probs
-    weights = np.where(quantile_est <= C, weights, 0)
+    weights = np.where(quantile_est <= C.reshape(-1, 1), weights.reshape(-1, 1), 0)
 
     T_tilde_miscoverage = np.where(T_tilde.reshape(-1, 1) < quantile_est, 1, 0)
 
     # Compute the estimated miscoverage for each quantile
-    tau_hats = (weights * T_tilde_miscoverage).sum(axis=1) / weights.sum(axis=1)
+    tau_hats = (weights * T_tilde_miscoverage).sum(axis=0) / weights.sum(axis=0)
+    print(tau_hats)
+    print(weights)
+    print(C_probs)
+    print(T_tilde_miscoverage)
 
     tau_diff = target_taus - tau_hats[:, np.newaxis]
     smallest_pos = np.where(tau_diff > 0, 1, -1. * np.inf).cumsum(axis=0).argmax(axis=0)
