@@ -6,6 +6,7 @@ survival_results.pkl
 saved
 lightning_logs/
 submit.sh
+slurm_outputs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
