@@ -5,6 +5,7 @@ survival_results.pkl
 .vscode
 saved
 lightning_logs/
+submit.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
