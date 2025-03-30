@@ -30,13 +30,12 @@ rater_backend = DetoxifyRater(
 )
 
 # %%
-from src.generation.vanilla_model import VanillaGenerator
+from src.generation.vanilla_model_vllm import VanillaGeneratorVLLM
 
 # TODO: FIX ARGS
-generator_backend = VanillaGenerator(
+generator_backend = VanillaGeneratorVLLM(
     model_name="meta-llama/Llama-3.2-3B",
     hf_token=hf_key,
-    max_input_tokens=40,
     max_output_tokens=30,
 )
 
@@ -51,7 +50,7 @@ from src.survival_runner import (
     default_text_prep_func,
 )
 
-batch_size = 1500
+batch_size = 300
 max_attempts = 40
 
 survival_runner = SurvivalRunner(

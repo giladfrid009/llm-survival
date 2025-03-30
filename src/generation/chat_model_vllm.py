@@ -2,7 +2,8 @@ from vllm import LLM, SamplingParams
 from src.generation.base import *
 from huggingface_hub import login
 
-class VanillaGenerator(GenerationBackend):
+
+class ChatGeneratorVLLM(GenerationBackend):
     def __init__(
         self,
         model_name: str,
@@ -16,7 +17,7 @@ class VanillaGenerator(GenerationBackend):
 
         if sampling_args is None:
             sampling_args = {}
-            
+
         login(hf_token)
 
         self.llm = LLM(
@@ -44,7 +45,8 @@ class VanillaGenerator(GenerationBackend):
         Returns:
             GenerationResult: The result, containing generated text or an error message.
         """
-        outputs = self.llm.generate([prompt], self.sampling_params, use_tqdm=False)
+        messages = [{"role": "user", "content": prompt}]
+        outputs = self.llm.chat(messages, self.sampling_params, use_tqdm=False, add_generation_prompt=True)
         result = GenerationResult(prompt=prompt, output=outputs[0].outputs[0].text.strip())
         return result
 
@@ -59,6 +61,7 @@ class VanillaGenerator(GenerationBackend):
         Returns:
             list[GenerationResult]: The results for each prompt.
         """
-        outputs = self.llm.generate(prompts, self.sampling_params, use_tqdm=False)
+        messages = [[{"role": "user", "content": text}] for text in prompts]
+        outputs = self.llm.chat(messages, self.sampling_params, use_tqdm=False, add_generation_prompt=True)
         results = [GenerationResult(prompt=prompt, output=output.outputs[0].text.strip()) for prompt, output in zip(prompts, outputs)]
         return results

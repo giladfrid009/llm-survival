@@ -19,3 +19,4 @@ dependencies:
     - huggingface_hub
     - nltk
     - accelerate
+    - lightning

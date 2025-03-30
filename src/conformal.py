@@ -37,7 +37,7 @@ def resample_calibration_set(generation_backend, rating_backend, prior_quantile_
     survival_runner = SurvivalRunner(
         generator=generation_backend,
         rater=rating_backend,
-        max_attempts=C,
+        max_attempts=10e6,
         toxicity_func=toxicity_func,
         text_prep_func=text_prep_func,
         conserve_memory=True,
@@ -46,6 +46,7 @@ def resample_calibration_set(generation_backend, rating_backend, prior_quantile_
     survival_results = survival_runner.generate(
         prompts=X,
         batch_size=batch_size,
+        max_attempts=C,
     )
 
     T_tilde = np.array([r.num_attempts for r in survival_results])
