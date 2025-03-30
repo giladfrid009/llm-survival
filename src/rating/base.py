@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Iterable, Iterator
 
 from tqdm.auto import tqdm
-from src.utils import batchify
+from src import utils
 
 
 @dataclass
@@ -108,7 +108,8 @@ class RatingRunner:
         Yields:
             RatingResult: The rating result for each processed text from the batch.
         """
-        batches = batchify(texts, batch_size)
+        utils.clear_memory()
+        batches = utils.batchify(texts, batch_size)
         for batch in tqdm(batches, desc="Rating", unit="batch"):
             yield from self.rate_batch(batch, **kwargs)
 
@@ -123,6 +124,7 @@ class RatingRunner:
         Yields:
             list[RatingResult]: The rating result for each processed batch of texts.
         """
+        utils.clear_memory()
         for batch in tqdm(texts, desc="Rating", unit="batch"):
             if not isinstance(batch, list):
                 batch = list(batch)

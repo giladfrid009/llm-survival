@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Iterable, Iterator
 
 from tqdm.auto import tqdm
-from src.utils import batchify
+from src import utils
 
 
 @dataclass
@@ -109,7 +109,8 @@ class GenerationRunner:
         Yields:
             GenerationResult: The results for each prompt.
         """
-        batches = batchify(prompts, batch_size)
+        utils.clear_memory()
+        batches = utils.batchify(prompts, batch_size)
         for batch in tqdm(batches, desc="Generating", unit="batch"):
             yield from self.generate_batch(batch, **kwargs)
 
@@ -128,6 +129,7 @@ class GenerationRunner:
         Yields:
             list[GenerationResult]: The results for each batch of prompts.
         """
+        utils.clear_memory()
         for batch in tqdm(prompts, desc="Generating", unit="batch"):
             if not isinstance(batch, list):
                 batch = list(batch)
