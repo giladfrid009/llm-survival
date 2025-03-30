@@ -32,13 +32,12 @@ rater_backend = DetoxifyRater(
 # %%
 from src.generation.vanilla_model import VanillaGenerator
 
+# TODO: FIX ARGS
 generator_backend = VanillaGenerator(
     model_name="meta-llama/Llama-3.2-3B",
-    hub_token=hf_key,
+    hf_token=hf_key,
     max_input_tokens=40,
     max_output_tokens=30,
-    torch_dtype=torch.bfloat16,
-    # attn_implementation="flash_attention_2",
 )
 
 # %%
