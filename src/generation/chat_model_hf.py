@@ -1,9 +1,9 @@
 import torch
 from transformers import BatchEncoding
-from src.generation.vanilla_model import VanillaGenerator
+from src.generation.vanilla_model_hf import VanillaGeneratorHF
 
 
-class ChatGenerator(VanillaGenerator):
+class ChatGeneratorHF(VanillaGeneratorHF):
     """
     Chat generation backend using a Hugging Face model.
     These models are trained for conversational or chat-like responses (like chat-GPT).
@@ -33,6 +33,7 @@ class ChatGenerator(VanillaGenerator):
             self.tokenizer.convert_tokens_to_ids("<|eot_id|>"),
         ]
 
+    # TODO: FIX
     def tokenize(self, text: list[str], kwargs: dict = {}) -> BatchEncoding:
         # Create a conversation structure for each text input
         messages = [[{"role": "user", "content": t}] for t in text]

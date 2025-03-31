@@ -3,7 +3,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, B
 from src.generation.base import GenerationResult, GenerationBackend
 
 
-class VanillaGenerator(GenerationBackend):
+class VanillaGeneratorHF(GenerationBackend):
     """
     Vanilla generation backend using a Hugging Face model.
     These models are trained for pure next-token generation, and not for conversational or chat-like responses.
@@ -62,14 +62,7 @@ class VanillaGenerator(GenerationBackend):
 
         # Compute the number of tokens for an empty input.
         self.empty_input_tokens = 0
-        empty_input = self.tokenize(
-            text=[""],
-            kwargs={
-                "max_length": None,
-                "truncation": False,
-                "padding": False
-            }
-        )
+        empty_input = self.tokenize(text=[""], kwargs={"max_length": None, "truncation": False, "padding": False})
         self.empty_input_tokens: int = empty_input["input_ids"].shape[1]
 
     def tokenize(self, text: list[str], kwargs: dict = {}) -> BatchEncoding:

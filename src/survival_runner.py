@@ -5,7 +5,7 @@ import math
 import datetime
 
 from tqdm.auto import tqdm
-from src.utils import RunningAverage
+from src import utils
 from src.generation.base import GenerationBackend, GenerationResult, GenerationRunner
 from src.rating.base import RatingBackend, RatingResult, RatingRunner
 
@@ -44,6 +44,7 @@ def default_text_prep_func(generation: GenerationResult) -> str:
         str: The text to be rated.
     """
     return generation.output
+
 
 def sentence_completion_text_prep_func(generation: GenerationResult) -> str:
     """
@@ -106,7 +107,7 @@ class SurvivalRunner:
         Args:
             generator (GenerationBackend): The backend used for text generation.
             rater (RatingBackend): The backend used for rating outputs.
-            max_attempts (int or torch.Tensor): Maximum number of attempts allowed for each prompt.
+            max_attempts (int): Global Maximum number of attempts allowed for each prompt.
             toxicity_func (Callable[[RatingResult], bool], optional): Toxicity test function.
             text_prep_func (Callable[[GenerationResult], str], optional): Text preparation function for rating.
             conserve_memory (bool): Whether to avoid storing different attributes in the `SurvivalResult`.
@@ -149,6 +150,7 @@ class SurvivalRunner:
     def generate(
         self,
         prompts: Iterable[str],
+        max_attempts: list[int] | None = None,
         batch_size: int = 10,
         **kwargs,
     ) -> Iterator[SurvivalResult]:
@@ -160,11 +162,17 @@ class SurvivalRunner:
         Args:
             prompts (Iterable[str]): An iterable of prompt strings.
             batch_size (int, optional): Number of prompts to process concurrently.
+            max_attempts (list[int] | None, optional): Per-sample maximum number of attempts.
+                If not None, for prompt `i` uses `min(max_attempts[i], self.max_attempts)`.
+                If None, uses `self.max_attempts` for all prompts.
             **kwargs: Additional keyword arguments passed to the generation backend.
 
         Yields:
             SurvivalResult: A finished result for a prompt.
         """
+
+        utils.clear_memory()
+
         self.current_task_id = 0
         prompt_iter = iter(prompts)
         active_tasks: list[SurvivalResult] = []
@@ -177,10 +185,12 @@ class SurvivalRunner:
                 except StopIteration:
                     break
 
+                attempts = self.max_attempts if max_attempts is None else min(max_attempts[self.current_task_id], self.max_attempts)
+
                 new_task = SurvivalResult(
                     id=self.current_task_id,
                     prompt=prompt,
-                    max_attempts=self.max_attempts if isinstance(self.max_attempts, int) else self.max_attempts[self.current_task_id],
+                    max_attempts=attempts,
                     num_attempts=0,
                 )
 
@@ -189,7 +199,7 @@ class SurvivalRunner:
 
         fill_tasks()
 
-        batch_time = RunningAverage(window_size=10)
+        batch_timer = utils.RunningAverage(window_size=10)
         total_length = len(prompts) if hasattr(prompts, "__len__") else None
         with tqdm(total=total_length, desc="Processing Prompts") as pbar:
 
@@ -224,15 +234,19 @@ class SurvivalRunner:
                 fill_tasks()
 
                 # update pbar metrics
-                batch_time.update(time.time() - start_time)
+                batch_timer.update(time.time() - start_time)
                 metrics = {
-                    "batch_num": f"{batch_time.count}",
-                    "batch_time": f"{float(batch_time):.2f}",
+                    "batch_num": f"{batch_timer.global_count}",
+                    "batch_time": f"{batch_timer.window_average:.2f}",
                 }
 
                 if total_length is not None:
                     items_left = total_length - pbar.n
-                    seconds_left = float(batch_time) * (items_left / batch_size) * (self.max_attempts if isinstance(self.max_attempts, int) else self.max_attempts.mean())
+                    seconds_left = (
+                        batch_timer.window_average
+                        * (items_left / batch_size)
+                        * (self.max_attempts if isinstance(self.max_attempts, int) else self.max_attempts.mean())
+                    )
                     metrics.update({"time_remaining": datetime.timedelta(seconds=int(seconds_left))})
 
                 pbar.set_postfix(metrics)
