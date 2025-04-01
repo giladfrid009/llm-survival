@@ -1,6 +1,7 @@
 from vllm import LLM, SamplingParams
 from src.generation.base import *
 from huggingface_hub import login
+from transformers import AutoTokenizer
 
 
 class ChatGeneratorVLLM(GenerationBackend):
@@ -8,7 +9,10 @@ class ChatGeneratorVLLM(GenerationBackend):
         self,
         model_name: str,
         hf_token: str,
+        gpu_memory_utilization: float = 0.5,
+        max_input_tokens: int = 100,
         max_output_tokens: int = 100,
+        max_batch_size: int = 1000,
         model_args: dict = None,
         sampling_args: dict = None,
     ):
@@ -20,9 +24,23 @@ class ChatGeneratorVLLM(GenerationBackend):
 
         login(hf_token)
 
+        overhead_tokens = 100
+        tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
+        empty_input = [{"role": "user", "content": ""}]
+        empty_input_tokens = len(tokenizer.apply_chat_template(empty_input, add_generation_prompt=True))
+        total_tokens = max_input_tokens + max_output_tokens + empty_input_tokens
+
+        print("INFO: Overhead tokens: ", overhead_tokens)
+        print("INFO: Empty input tokens: ", empty_input_tokens)
+        print("INFO: Total sequence tokens: ", total_tokens)
+
         self.llm = LLM(
             model=model_name,
-            gpu_memory_utilization=model_args.pop("gpu_memory_utilization", 0.95),
+            gpu_memory_utilization=gpu_memory_utilization,
+            max_model_len=total_tokens + overhead_tokens,
+            max_seq_len_to_capture=total_tokens + overhead_tokens,
+            max_num_seqs=max_batch_size,
+            max_num_batched_tokens=total_tokens * max_batch_size + overhead_tokens,
             **model_args,
         )
 
