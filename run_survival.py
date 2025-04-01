@@ -23,10 +23,10 @@ def run_survival_analysis(prompts: List[str], prompt_attempts: Optional[List[int
     # Hardcoded parameters
     SEED = 42
     HF_KEY = utils.api_key_from_file("HF_KEY.txt")
-    MAX_INPUT_TOKENS = 40
-    MAX_OUTPUT_TOKENS = 30
-    BATCH_SIZE = 1500
-    MAX_ATTEMPTS = 40
+    MAX_INPUT_TOKENS = 40 # length of input prompt in tokens
+    MAX_OUTPUT_TOKENS = 30 # length of generated output in tokens
+    BATCH_SIZE = 1500 # number of samples to process in each batch
+    MAX_ATTEMPTS = 40 # global threshold of attempts for all samples, never exceed this value
 
     utils.set_seed(SEED)
     utils.clear_memory()
