@@ -141,6 +141,7 @@ def generate_survival_results(
 
 if __name__ == "__main__":
     import pandas as pd
+    import pickle
 
     # Load example data
     df = pd.read_json("hf://datasets/allenai/real-toxicity-prompts/prompts.jsonl", lines=True)
@@ -149,3 +150,7 @@ if __name__ == "__main__":
 
     prompt_attempts = None
     results = generate_survival_results(inputs, prompt_attempts=prompt_attempts, multi_gpu=False)
+
+    # Now save the results to a file
+    # with open("survival_results.pkl", "wb") as f:
+        # pickle.dump(results, f)
