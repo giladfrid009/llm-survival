@@ -1,5 +1,5 @@
 {
-    "name": "Prop_rtp_500_ModernBERT",
+    "name": "Prop_rtp_500_ModernBERT_L1",
     "batch_size": 500,
     "accumulate_grad_batches": 1,
     "L1_reg": 1e-2,
