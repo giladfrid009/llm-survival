@@ -47,7 +47,7 @@ class ToxicClassifier(pl.LightningModule):
             meta = [item.to(output.device) for item in meta]
         else:
             meta = meta.to(output.device)
-        loss = getattr(self, self.config["loss"])(output, meta, self.config["L1_reg"] if "L1_reg" in self.config else 0.0)
+        loss = getattr(self, self.config["loss"])(output, meta, self.config["L1_reg"] if "L1_reg" in self.config.keys() else 0.0)
         self.log("train_loss", loss)
         return {"loss": loss}
 
@@ -152,10 +152,10 @@ class ToxicClassifier(pl.LightningModule):
             return F.binary_cross_entropy_with_logits(input[:,1], meta.float()) + L1_reg * torch.mean(torch.sigmoid(input[:,1]))
 
     def survival_loss(self, input, meta, L1_reg=0.0):
-        return survival_loss(input, meta)
+        return survival_loss(input, meta, L1_reg)
     
     def prop_loss(self, input, meta, L1_reg=0.0):
-        return prop_loss(input, meta)
+        return prop_loss(input, meta, L1_reg)
 
     def binary_accuracy(self, output, meta):
         """Custom binary_accuracy function.
