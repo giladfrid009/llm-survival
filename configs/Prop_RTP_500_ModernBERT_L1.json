@@ -1,0 +1,47 @@
+{
+    "name": "Prop_rtp_500_ModernBERT",
+    "batch_size": 500,
+    "accumulate_grad_batches": 1,
+    "L1_reg": 1e-2,
+    "loss": "prop_loss",
+    "arch": {
+        "type": "ModernBERT",
+        "args": {
+            "num_classes": 2,
+            "model_type": "answerdotai/ModernBERT-base",
+            "model_name": "ModernBertForSequenceClassification",
+            "tokenizer_name": "AutoTokenizer"
+        }
+    },
+    "dataset": {
+        "train": {
+            "type": "PropDataset",
+            "pkl_path": "data/rtp_500/split_1_0.5_0.1_0.2_0.2/train.pkl"
+        },
+        "val": {
+            "type": "PropDataset",
+            "pkl_path": "data/rtp_500/split_1_0.5_0.1_0.2_0.2/val.pkl"
+        },
+        "cal": {
+            "type": "ClassificationDataset",
+            "pkl_path": "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
+        },
+        "test": {
+            "type": "ClassificationDataset",
+            "pkl_path": "data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl"
+        },
+        "args": {
+            "score_name": "toxicity",
+            "threshold": 0.5,
+            "max_samples": 40
+        }
+    },
+    "optimizer": {
+        "type": "AdamW",
+        "args": {
+            "lr": 3e-5,
+            "weight_decay": 3e-6,
+            "amsgrad": true
+        }
+    }
+}

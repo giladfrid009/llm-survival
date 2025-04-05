@@ -47,7 +47,7 @@ class ToxicClassifier(pl.LightningModule):
             meta = [item.to(output.device) for item in meta]
         else:
             meta = meta.to(output.device)
-        loss = getattr(self, self.config["loss"])(output, meta)
+        loss = getattr(self, self.config["loss"])(output, meta, self.config["L1_reg"] if "L1_reg" in self.config else 0.0)
         self.log("train_loss", loss)
         return {"loss": loss}
 
@@ -94,25 +94,27 @@ class ToxicClassifier(pl.LightningModule):
     # Survival time T is the time until a failure occurs
     # It is Geometrically distributed with probability p
     # Predict the tau quantile of the distribution
-    def predict_q_tau(self, x, taus):
+    def predict_q_tau(self, p, taus):
         """
         Predicts the quantiles taus of the survival time distribution
 
         Args:
-            x ([torch.tensor]): input tensor
+            p ([torch.tensor]): predicted probabilities
             taus ([torch.tensor]): quantiles to predict
 
         Returns:
             [torch.tensor]: predicted quantiles
         """
         with torch.no_grad():
-            output = self.forward(x)
-            p = torch.sigmoid(output[:,1])
             if self.min_p:
                 p = torch.max(p, self.min_p)
             assert torch.all(p > 0), "p must be greater than 0"
+            assert torch.all(p < 1), "p must be less than 1"
             p_np = p.cpu().numpy()
             q_tau = geom.ppf(taus.cpu().numpy(), p_np)
+            print(f"q_taus shape: {q_tau.shape}")
+            print(f"taus shape: {taus.shape}")
+            print(f"p shape: {p.shape}")
             return torch.tensor(q_tau).to(p.device)
 
 
@@ -128,7 +130,7 @@ class ToxicClassifier(pl.LightningModule):
         proba = self.predict_proba(x)
 
         if self.taus != None:
-            q_taus = self.predict_q_tau(x, self.taus)
+            q_taus = self.predict_q_tau(proba, self.taus)
         else:
             q_taus = None
         
@@ -137,7 +139,7 @@ class ToxicClassifier(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), **self.config["optimizer"]["args"])
 
-    def binary_cross_entropy(self, input, meta):
+    def binary_cross_entropy(self, input, meta, L1_reg=0.0):
         """Custom binary_cross_entropy function.
 
         Args:
@@ -147,12 +149,15 @@ class ToxicClassifier(pl.LightningModule):
         Returns:
             [torch.tensor]: model loss
         """
-        return F.binary_cross_entropy_with_logits(input[:,1], meta.float())
+        if L1_reg == 0.0:
+            return F.binary_cross_entropy_with_logits(input[:,1], meta.float())
+        else:
+            return F.binary_cross_entropy_with_logits(input[:,1], meta.float()) + L1_reg * torch.mean(torch.sigmoid(input[:,1]))
 
-    def survival_loss(self, input, meta):
+    def survival_loss(self, input, meta, L1_reg=0.0):
         return survival_loss(input, meta)
     
-    def prop_loss(self, input, meta):
+    def prop_loss(self, input, meta, L1_reg=0.0):
         return prop_loss(input, meta)
 
     def binary_accuracy(self, output, meta):
