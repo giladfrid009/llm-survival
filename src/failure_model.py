@@ -112,9 +112,6 @@ class ToxicClassifier(pl.LightningModule):
             assert torch.all(p < 1), "p must be less than 1"
             p_np = p.cpu().numpy()
             q_tau = geom.ppf(taus.cpu().numpy(), p_np)
-            print(f"q_taus shape: {q_tau.shape}")
-            print(f"taus shape: {taus.shape}")
-            print(f"p shape: {p.shape}")
             return torch.tensor(q_tau).to(p.device)
 
 
