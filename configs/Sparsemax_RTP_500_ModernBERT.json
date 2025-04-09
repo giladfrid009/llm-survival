@@ -1,9 +1,8 @@
 {
-    "name": "Prop_rtp_500_ModernBERT_L1",
+    "name": "Sparsemax_rtp_500_ModernBERT",
     "batch_size": 500,
     "accumulate_grad_batches": 1,
-    "L1_reg": 1,
-    "loss": "prop_loss",
+    "loss": "sparsemax_loss",
     "arch": {
         "type": "ModernBERT",
         "args": {

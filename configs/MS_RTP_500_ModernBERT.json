@@ -1,9 +1,8 @@
 {
-    "name": "Prop_rtp_500_ModernBERT_L1",
+    "name": "MS_rtp_500_ModernBERT",
     "batch_size": 500,
     "accumulate_grad_batches": 1,
-    "L1_reg": 1,
-    "loss": "prop_loss",
+    "loss": "binary_cross_entropy",
     "arch": {
         "type": "ModernBERT",
         "args": {
@@ -15,7 +14,7 @@
     },
     "dataset": {
         "train": {
-            "type": "PropDataset",
+            "type": "MultiSampleDataset",
             "pkl_path": "data/rtp_500/split_1_0.5_0.1_0.2_0.2/train.pkl"
         },
         "val": {
@@ -33,13 +32,13 @@
         "args": {
             "score_name": "toxicity",
             "threshold": 0.5,
-            "max_samples": 40
+            "max_samples": 5
         }
     },
     "optimizer": {
-        "type": "AdamW",
+        "type": "Adam",
         "args": {
-            "lr": 3e-5,
+            "lr": 1e-5,
             "weight_decay": 3e-6,
             "amsgrad": true
         }
