@@ -69,10 +69,10 @@ data_dir = os.path.dirname(data_path)
 proportions_str = args.proportions.replace(",", "_")
 first_last_postfix = ""
 if args.take_first_N is not None:
-    first_last_postfix = f"first_{args.take_first_N}"
+    first_last_postfix = f"_first_{args.take_first_N}"
 if args.take_last_N is not None:
-    first_last_postfix = f"last_{args.take_last_N}"
-split_folder = os.path.join(data_dir, f"split_{seed}_{proportions_str}_{first_last_postfix}")
+    first_last_postfix = f"_last_{args.take_last_N}"
+split_folder = os.path.join(data_dir, f"split_{seed}_{proportions_str}{first_last_postfix}")
 os.makedirs(split_folder, exist_ok=True)
 
 # Define split names.
