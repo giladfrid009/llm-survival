@@ -60,6 +60,6 @@ class VanillaGeneratorVLLM(GenerationBackend):
         Returns:
             list[GenerationResult]: The results for each prompt.
         """
-        outputs = self.llm.generate(prompts, self.sampling_params, use_tqdm=False)
+        outputs = self.llm.generate(prompts, self.sampling_params, use_tqdm=True)
         results = [GenerationResult(prompt=prompt, output=output.outputs[0].text.strip()) for prompt, output in zip(prompts, outputs)]
         return results
