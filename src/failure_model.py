@@ -3,6 +3,8 @@ import transformers
 
 import pytorch_lightning as pl
 from src.loss import survival_loss, prop_loss
+from entmax import sparsemax
+from entmax_loss import sparsemax_loss
 import torch
 from torch.nn import functional as F
 import torchmetrics
@@ -27,6 +29,12 @@ class ToxicClassifier(pl.LightningModule):
         self.num_classes = config["arch"]["args"]["num_classes"]
         self.model_args = config["arch"]["args"]
         self.model, self.tokenizer = get_model_and_tokenizer(**self.model_args)
+        
+        # Define a logits-to-probabilities function. Sparsemax if sparsemax_loss is used, otherwise sigmoid
+        if config["loss"] == "sparsemax_loss":
+            self.logits_to_probs = sparsemax
+        else:
+            self.logits_to_probs = (lambda x: torch.sigmoid(x[:, 1]))
         self.auroc = torchmetrics.AUROC(task="binary")
 
         self.num_main_classes = self.num_classes
@@ -60,7 +68,7 @@ class ToxicClassifier(pl.LightningModule):
         
         # preds = output[:, 1]  
         # targets = meta.int().to(preds.device)
-        # self.auroc.update(torch.sigmoid(preds), targets)
+        # self.auroc.update(self.logits_to_probs(preds), targets)
 
         self.log("val_ce", ce, prog_bar=True)
         # self.log("val_acc", acc)
@@ -86,7 +94,7 @@ class ToxicClassifier(pl.LightningModule):
     def predict_proba(self, x):
         with torch.no_grad():
             output = self.forward(x)
-            return torch.sigmoid(output[:,1])
+            return self.logits_to_probs(output)[:, 1]
         
     def set_min_p_for_q_tau(self, min_p):
         self.min_p = min_p
@@ -107,9 +115,9 @@ class ToxicClassifier(pl.LightningModule):
         """
         with torch.no_grad():
             if self.min_p:
-                p = torch.max(p, self.min_p)
-            assert torch.all(p > 0), "p must be greater than 0"
-            assert torch.all(p < 1), "p must be less than 1"
+                p = torch.maximum(p, torch.tensor([self.min_p]).to(p.device))
+            assert torch.all(p >= 0), "p must be non-negative"
+            assert torch.all(p <= 1), "p must be less than 1"
             p_np = p.cpu().numpy()
             q_tau = geom.ppf(taus.cpu().numpy(), p_np)
             return torch.tensor(q_tau).to(p.device)
@@ -149,13 +157,31 @@ class ToxicClassifier(pl.LightningModule):
         if L1_reg == 0.0:
             return F.binary_cross_entropy_with_logits(input[:,1], meta.float())
         else:
-            return F.binary_cross_entropy_with_logits(input[:,1], meta.float()) + L1_reg * torch.mean(torch.sigmoid(input[:,1]))
+            return F.binary_cross_entropy_with_logits(input[:,1], meta.float()) + L1_reg * torch.mean(self.logits_to_probs(input))
 
     def survival_loss(self, input, meta, L1_reg=0.0):
         return survival_loss(input, meta, L1_reg)
     
     def prop_loss(self, input, meta, L1_reg=0.0):
         return prop_loss(input, meta, L1_reg)
+    
+    def sparsemax_loss(self, input, meta, L1_reg=0.0):
+        """Custom sparsemax_loss function.
+
+        Args:
+            input ([torch.tensor]): model predictions
+            meta ([torch.tensor]): meta tensor including targets
+
+        Returns:
+            [torch.tensor]: model loss
+        """
+        meta = meta[0].float()
+        meta = torch.stack([meta, 1 - meta], dim=1)
+        meta = meta.to(input.device)
+        if L1_reg == 0.0:
+            return sparsemax_loss(input, meta).mean()
+        else:
+            return sparsemax_loss(input, meta).mean() + L1_reg * torch.mean(self.logits_to_probs(input))
 
     def binary_accuracy(self, output, meta):
         """Custom binary_accuracy function.
@@ -170,7 +196,7 @@ class ToxicClassifier(pl.LightningModule):
         target = meta.to(output.device)
         with torch.no_grad():
             mask = target != -1
-            pred = torch.sigmoid(output[:,1][mask]) >= 0.5
+            pred = self.logits_to_probs(output[mask]) >= 0.5
             correct = torch.sum(pred.to(output[mask].device) == target[mask])
             if torch.sum(mask).item() != 0:
                 correct = correct.item() / torch.sum(mask).item()
