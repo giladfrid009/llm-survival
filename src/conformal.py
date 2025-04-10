@@ -28,7 +28,7 @@ def get_probs(budget_per_sample, prior_quantile_est, needed_prob=1):
 
 
 # Generate a new calibration set - each observation has a random number of samples:
-def resample_calibration_set(generation_backend, rating_backend, prior_quantile_est, C_probs, X, toxicity_func=default_toxicity_func, text_prep_func=default_text_prep_func, batch_size=1500):
+def sample_calibration_set(generation_backend, rating_backend, prior_quantile_est, C_probs, X, toxicity_func=default_toxicity_func, text_prep_func=default_text_prep_func, batch_size=1500):
     # Determine the number of samples per instance
     C = np.where(np.random.uniform(size=len(prior_quantile_est)) < C_probs, 
                                     prior_quantile_est, 0).astype(int).reshape(-1, 1)
@@ -132,23 +132,26 @@ def conformalize(trainer, model, target_taus, canidate_taus, X, generation_backe
             prior_quantile_est = np.minimum(prior_quantile_est, max_estimator)
 
     # Resample the calibration set
-    T_tilde, C = resample_calibration_set(generation_backend, rating_backend, prior_quantile_est, C_probs, X, toxicity_func=toxicity_func, text_prep_func=text_prep_func, batch_size=batch_size)
+    T_tilde, C = sample_calibration_set(generation_backend, rating_backend, prior_quantile_est, C_probs, X, toxicity_func=toxicity_func, text_prep_func=text_prep_func, batch_size=batch_size)
 
     # Compute the weights - 1/conditional_probability
     weights = 1 / C_probs.reshape(-1, 1)
     weights = np.where(quantile_est <= C, weights, 0)
+    print(weights)
 
     T_tilde_miscoverage = np.where(T_tilde < quantile_est, 1, 0)
+    print(T_tilde_miscoverage)
 
     # Compute the estimated miscoverage for each quantile
-    tau_hats = (weights * T_tilde_miscoverage).sum(axis=1) / weights.sum(axis=1)
+    tau_hats = (weights * T_tilde_miscoverage).sum(axis=0) / weights.sum(axis=0)
+    print(tau_hats)
 
     tau_diff = target_taus - tau_hats[:, np.newaxis]
     smallest_pos = np.where(tau_diff > 0, 1, -1. * np.inf).cumsum(axis=0).argmax(axis=0)
-    tau_hats = canidate_taus[smallest_pos]
+    tau_hat = canidate_taus[smallest_pos]
     q_hats = quantile_est[:,smallest_pos]
     
-    return tau_hats, max_estimator, q_hats
+    return tau_hat, max_estimator, q_hats
 
 # Define the conformalizing function
 # def conformalize(trainer, model, target_taus, canidate_taus, X, generation_backend, rating_backend, budget_per_sample, share_budget=False, min_sample_size=None, needed_prob=1, toxicity_func=default_toxicity_func, text_prep_func=default_text_prep_func, batch_size=1500):
@@ -176,7 +179,7 @@ def conformalize(trainer, model, target_taus, canidate_taus, X, generation_backe
 #         prior_quantile_est = np.minimum(prior_quantile_est, max_estimator)
 
 #     # Resample the calibration set
-#     T_tilde, C = resample_calibration_set(generation_backend, rating_backend, prior_quantile_est, C_probs, X, toxicity_func=toxicity_func, text_prep_func=text_prep_func, batch_size=batch_size)
+#     T_tilde, C = sample_calibration_set(generation_backend, rating_backend, prior_quantile_est, C_probs, X, toxicity_func=toxicity_func, text_prep_func=text_prep_func, batch_size=batch_size)
 #     print(f"Total budget used per sample is {C.mean()}")
 
 #     # Compute the weights - 1/conditional_probability

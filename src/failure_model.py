@@ -95,6 +95,9 @@ class ToxicClassifier(pl.LightningModule):
         with torch.no_grad():
             output = self.forward(x)
             return self.logits_to_probs(output)
+
+    def set_threshold_p_for_q_tau(self, threshold):
+        self.threshold = threshold
         
     def set_min_p_for_q_tau(self, min_p):
         self.min_p = min_p
@@ -119,6 +122,9 @@ class ToxicClassifier(pl.LightningModule):
             torch.Tensor: Predicted quantiles, where the support starts at 1 and infinity is used when p==0 and tau>0.
         """
         with torch.no_grad():
+            # Enforce the threshold if applicable
+            if self.threshold:
+                p = torch.where(p > self.threshold, p, torch.zeros_like(p))
             # Enforce the minimum probability if applicable
             if self.min_p:
                 p = torch.clamp(p, min=self.min_p)

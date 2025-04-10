@@ -245,7 +245,7 @@ class SurvivalRunner:
                     seconds_left = (
                         batch_timer.window_average
                         * (items_left / batch_size)
-                        * (self.max_attempts if isinstance(self.max_attempts, int) else self.max_attempts.mean())
+                        * (self.max_attempts if (isinstance(self.max_attempts, int) or isinstance(self.max_attempts, float)) else self.max_attempts.max())
                     )
                     metrics.update({"time_remaining": datetime.timedelta(seconds=int(seconds_left))})
 
