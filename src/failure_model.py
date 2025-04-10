@@ -94,7 +94,7 @@ class ToxicClassifier(pl.LightningModule):
     def predict_proba(self, x):
         with torch.no_grad():
             output = self.forward(x)
-            return self.logits_to_probs(output)[:, 1]
+            return self.logits_to_probs(output)
         
     def set_min_p_for_q_tau(self, min_p):
         self.min_p = min_p
@@ -103,25 +103,48 @@ class ToxicClassifier(pl.LightningModule):
     # It is Geometrically distributed with probability p
     # Predict the tau quantile of the distribution
     def predict_q_tau(self, p, taus):
-        """
-        Predicts the quantiles taus of the survival time distribution
+    """
+    Predicts the quantiles taus of the survival time distribution based on a geometric model.
 
-        Args:
-            p ([torch.tensor]): predicted probabilities
-            taus ([torch.tensor]): quantiles to predict
+    For p > 0:
+        q = ceil( log1p(-taus) / log1p(-p) ), ensuring q is at least 1.
+    For p == 0:
+        If tau == 0, q is 1; otherwise, q is infinity.
 
-        Returns:
-            [torch.tensor]: predicted quantiles
-        """
-        with torch.no_grad():
-            if self.min_p:
-                p = torch.maximum(p, torch.tensor([self.min_p]).to(p.device))
-            assert torch.all(p >= 0), "p must be non-negative"
-            assert torch.all(p <= 1), "p must be less than 1"
-            p_np = p.cpu().numpy()
-            q_tau = geom.ppf(taus.cpu().numpy(), p_np)
-            return torch.tensor(q_tau).to(p.device)
+    Args:
+        p (torch.Tensor): Predicted probabilities (success probabilities) in [0, 1].
+        taus (torch.Tensor): Quantile levels in [0, 1].
 
+    Returns:
+        torch.Tensor: Predicted quantiles, where the support starts at 1 and infinity is used when p==0 and tau>0.
+    """
+    with torch.no_grad():
+        # Enforce the minimum probability if applicable
+        if self.min_p:
+            p = torch.clamp(p, min=self.min_p)
+
+        # Basic sanity checks (raises ValueError if violated)
+        if not (torch.all(p >= 0) and torch.all(p <= 1)):
+            raise ValueError("p must be in the range [0, 1]")
+
+        # Broadcast p and taus to a common shape
+        p, taus = torch.broadcast_tensors(p, taus)
+
+        # Calculate the geometric quantiles for p > 0 in a numerically stable manner.
+        # torch.log1p(-x) computes log(1-x), which helps with small x values.
+        quantiles_positive = torch.ceil(torch.log1p(-taus) / torch.log1p(-p)).clamp(min=1)
+
+        # For p == 0, define: quantile = 1 if tau == 0, otherwise quantile = +infinity.
+        quantiles_zero = torch.where(
+            taus == 0,
+            torch.ones_like(taus),
+            torch.full_like(taus, float('inf'))
+        )
+
+        # Select between the two cases based on whether p > 0.
+        quantiles = torch.where(p > 0, quantiles_positive, quantiles_zero)
+
+        return quantiles.to(p.device)
 
     def set_taus(self, taus):
         self.taus = taus
