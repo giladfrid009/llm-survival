@@ -118,6 +118,7 @@ class ToxicClassifier(pl.LightningModule):
         Returns:
             torch.Tensor: Predicted quantiles, where the support starts at 1 and infinity is used when p==0 and tau>0.
         """
+        taus.to(p.device)
         with torch.no_grad():
             # Enforce the minimum probability if applicable
             if self.min_p:
