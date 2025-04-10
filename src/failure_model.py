@@ -4,7 +4,7 @@ import transformers
 import pytorch_lightning as pl
 from src.loss import survival_loss, prop_loss
 from entmax import sparsemax
-from entmax_loss import sparsemax_loss
+from src.entmax_loss import sparsemax_loss
 import torch
 from torch.nn import functional as F
 import torchmetrics
