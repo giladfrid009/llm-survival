@@ -6,7 +6,7 @@ from src.survival_runner import (
     SurvivalResult,
     default_toxicity_func,
     default_text_prep_func,
-    run_survival_sampling_generic
+    generate_survival_results_generic
 )
 from scipy.optimize import bisect
 import torch
@@ -68,16 +68,16 @@ def sample_calibration_set(
 
     # Generate the calibration set using the generic survival runner.
     # Note: We set max_attempts high (here int(10e6)) and pass C as per–prompt attempt limits.
-    survival_results = run_survival_sampling_generic(
+    survival_results = generate_survival_results_generic(
         prompts=X,
         prompt_attempts=C,
         generate_params={"batch_size": batch_size},
         generator_params=generator_params,
         rater_params=rater_params,
         max_attempts=int(10e6),
-        toxicity_func=toxicity_func,
-        text_prep_func=text_prep_func,
+        toxicity_func="sentence_completion",
         conserve_memory=True,
+        multi_gpu=True,
     )
 
     T_tilde = np.array([r.num_attempts for r in survival_results]).reshape(-1, 1)

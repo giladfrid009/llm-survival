@@ -380,8 +380,8 @@ def worker_generic(
     rater_params: Optional[Dict[str, Any]],
     generate_params: Optional[Dict[str, Any]] = None,
     max_attempts: int = 5,
-    toxicity_func: Optional[Callable[[Any], bool]] = None,
-    text_prep_func: Optional[Callable[[Any], str]] = None,
+    toxicity_func: Optional[str] = None,
+    text_prep_func: Optional[str] = None,
     conserve_memory: bool = False,
 ) -> List[SurvivalResult]:
     """
@@ -405,6 +405,7 @@ def worker_generic(
     """
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     print("Currently using GPU ID for survival sampling:", gpu_id)
+    print("Length of prompts_chunk:", len(prompts_chunk))
     return run_survival_sampling_generic(
         generator_params=generator_params,
         rater_params=rater_params,
@@ -412,8 +413,8 @@ def worker_generic(
         prompt_attempts=attempts_chunk,
         generate_params=generate_params,
         max_attempts=max_attempts,
-        toxicity_func=toxicity_func,
-        text_prep_func=text_prep_func,
+        toxicity_func=sentence_completion_text_prep_func if toxicity_func == "sentence_completion" else default_toxicity_func,
+        text_prep_func=default_text_prep_func,
         conserve_memory=conserve_memory,
     )
 
@@ -476,7 +477,7 @@ def generate_survival_results_generic(
         raise RuntimeError("No CUDA devices available for multi-GPU processing.")
     
     # Split prompts and prompt_attempts across GPUs.
-    prompts_chunks = [prompts[i::n_gpus] for i in range(n_gpus)]
+    prompts_chunks = [prompts.data[i::n_gpus] for i in range(n_gpus)]
     attempts_chunks = (
         [prompt_attempts[i::n_gpus] for i in range(n_gpus)]
         if prompt_attempts is not None
