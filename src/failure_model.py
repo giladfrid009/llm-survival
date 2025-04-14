@@ -3,8 +3,8 @@ import transformers
 
 import pytorch_lightning as pl
 from src.loss import survival_loss, prop_loss
-from entmax import sparsemax
-from src.entmax_loss import sparsemax_loss
+# from entmax import sparsemax
+# from src.entmax_loss import sparsemax_loss
 import torch
 from torch.nn import functional as F
 import torchmetrics
@@ -31,10 +31,10 @@ class ToxicClassifier(pl.LightningModule):
         self.model, self.tokenizer = get_model_and_tokenizer(**self.model_args)
         
         # Define a logits-to-probabilities function. Sparsemax if sparsemax_loss is used, otherwise sigmoid
-        if config["loss"] == "sparsemax_loss":
-            self.logits_to_probs = sparsemax
-        else:
-            self.logits_to_probs = (lambda x: torch.sigmoid(x[:, 1]))
+        # if config["loss"] == "sparsemax_loss":
+        #     self.logits_to_probs = sparsemax
+        # else:
+        self.logits_to_probs = (lambda x: torch.sigmoid(x[:, 1]))
         self.auroc = torchmetrics.AUROC(task="binary")
 
         self.num_main_classes = self.num_classes
@@ -195,23 +195,23 @@ class ToxicClassifier(pl.LightningModule):
     def prop_loss(self, input, meta, L1_reg=0.0):
         return prop_loss(input, meta, L1_reg)
     
-    def sparsemax_loss(self, input, meta, L1_reg=0.0):
-        """Custom sparsemax_loss function.
+    # def sparsemax_loss(self, input, meta, L1_reg=0.0):
+    #     """Custom sparsemax_loss function.
 
-        Args:
-            input ([torch.tensor]): model predictions
-            meta ([torch.tensor]): meta tensor including targets
+    #     Args:
+    #         input ([torch.tensor]): model predictions
+    #         meta ([torch.tensor]): meta tensor including targets
 
-        Returns:
-            [torch.tensor]: model loss
-        """
-        meta = meta[0].float()
-        meta = torch.stack([meta, 1 - meta], dim=1)
-        meta = meta.to(input.device)
-        if L1_reg == 0.0:
-            return sparsemax_loss(input, meta).mean()
-        else:
-            return sparsemax_loss(input, meta).mean() + L1_reg * torch.mean(self.logits_to_probs(input))
+    #     Returns:
+    #         [torch.tensor]: model loss
+    #     """
+    #     meta = meta[0].float()
+    #     meta = torch.stack([meta, 1 - meta], dim=1)
+    #     meta = meta.to(input.device)
+    #     if L1_reg == 0.0:
+    #         return sparsemax_loss(input, meta).mean()
+    #     else:
+    #         return sparsemax_loss(input, meta).mean() + L1_reg * torch.mean(self.logits_to_probs(input))
 
     def binary_accuracy(self, output, meta):
         """Custom binary_accuracy function.

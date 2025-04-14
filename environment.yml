@@ -1,4 +1,4 @@
-name: llm-survival
+name: llm-survival2
 channels:
   - conda-forge
   - defaults
@@ -20,4 +20,3 @@ dependencies:
     - nltk
     - accelerate
     - lightning
-    - entmax

@@ -291,7 +291,7 @@ def survival_runner_factory(
         from src.generation.vanilla_model_vllm import VanillaGeneratorVLLM
         generator_backend = VanillaGeneratorVLLM(
             model_name=model_name,
-            hub_token=HF_KEY,
+            hf_token=HF_KEY,
             max_input_tokens=MAX_INPUT_TOKENS,
             max_output_tokens=MAX_OUTPUT_TOKENS,
             max_batch_size=BATCH_SIZE,
@@ -404,6 +404,7 @@ def worker_generic(
         A list of SurvivalResult objects.
     """
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    print("Currently using GPU ID for survival sampling:", gpu_id)
     return run_survival_sampling_generic(
         generator_params=generator_params,
         rater_params=rater_params,
