@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Iterable, Iterator, Callable
 import time
-import math
 import datetime
+from typing import List, Optional, Callable, Dict, Iterable, Iterator,Any
+import os
+import torch
+import concurrent.futures
 
 from tqdm.auto import tqdm
 from src import utils
@@ -250,3 +252,262 @@ class SurvivalRunner:
                     metrics.update({"time_remaining": datetime.timedelta(seconds=int(seconds_left))})
 
                 pbar.set_postfix(metrics)
+
+def survival_runner_factory(
+    generator_backend: Optional[Any] = None,
+    rater_backend: Optional[Any] = None,
+    max_attempts: int = 5,
+    toxicity_func: Optional[Callable[[Any], bool]] = None,
+    text_prep_func: Optional[Callable[[Any], str]] = None,
+    conserve_memory: bool = False,
+    generator_params: Optional[Dict[str, Any]] = None,
+    rater_params: Optional[Dict[str, Any]] = None,
+) -> SurvivalRunner:
+    """
+    Factory function to construct a SurvivalRunner with configurable generation and rating backends.
+
+    Args:
+        generator_backend: Custom generation backend; if not provided a default is built using generator_params.
+        rater_backend: Custom rating backend; if not provided a default is built using rater_params.
+        max_attempts: Global maximum attempts per prompt.
+        toxicity_func: Function to decide if output is toxic.
+        text_prep_func: Function to prepare text before rating.
+        conserve_memory: If True, conserve memory by storing fewer details.
+        generator_params: Dictionary of parameters to configure the generation backend.
+        rater_params: Dictionary of parameters to configure the rating backend.
+
+    Returns:
+        An instance of SurvivalRunner.
+    """
+    if generator_backend is None:
+        HF_KEY = utils.api_key_from_file("HF_KEY.txt")
+        generator_params = generator_params or {}
+        MAX_INPUT_TOKENS = generator_params.get("max_input_tokens", 40)
+        MAX_OUTPUT_TOKENS = generator_params.get("max_output_tokens", 30)
+        BATCH_SIZE = generator_params.get("batch_size", 1500)
+        GPU_MEMORY_UTILIZATION = generator_params.get("gpu_memory_utilization", 0.5)
+        model_name = generator_params.get("model_name", "meta-llama/Llama-3.2-1B")
+        
+        from src.generation.vanilla_model_vllm import VanillaGeneratorVLLM
+        generator_backend = VanillaGeneratorVLLM(
+            model_name=model_name,
+            hub_token=HF_KEY,
+            max_input_tokens=MAX_INPUT_TOKENS,
+            max_output_tokens=MAX_OUTPUT_TOKENS,
+            max_batch_size=BATCH_SIZE,
+            gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
+        )
+    
+    if rater_backend is None:
+        rater_params = rater_params or {}
+        model_type = rater_params.get("model_type", "original")
+        amp = rater_params.get("amp", True)
+        from src.rating.detoxify import DetoxifyRater
+        rater_backend = DetoxifyRater(model_type=model_type, amp=amp)
+    
+    if toxicity_func is None:
+        toxicity_func = default_toxicity_func
+    if text_prep_func is None:
+        text_prep_func = default_text_prep_func
+    
+    return SurvivalRunner(
+        generator=generator_backend,
+        rater=rater_backend,
+        max_attempts=max_attempts,
+        toxicity_func=toxicity_func,
+        text_prep_func=text_prep_func,
+        conserve_memory=conserve_memory,
+    )
+
+
+def run_survival_sampling_generic(
+    generator_params: Optional[Dict[str, Any]],
+    rater_params: Optional[Dict[str, Any]],
+    prompts: List[str],
+    prompt_attempts: Optional[List[int]] = None,
+    generate_params: Optional[Dict[str, Any]] = None,
+    max_attempts: int = 5,
+    toxicity_func: Optional[Callable[[Any], bool]] = None,
+    text_prep_func: Optional[Callable[[Any], str]] = None,
+    conserve_memory: bool = False,
+) -> List[SurvivalResult]:
+    """
+    Run survival analysis using configurable generator and rater parameters.
+
+    Args:
+        generator_params: Dictionary for configuring the generation backend.
+        rater_params: Dictionary for configuring the rating backend.
+        prompts: List of prompt strings.
+        prompt_attempts: Optional per-prompt maximum attempts.
+        generate_params: Additional parameters for the runner's generate() call (e.g. batch_size).
+        max_attempts: Global maximum attempts per prompt.
+        toxicity_func: Function to determine toxicity.
+        text_prep_func: Function to prepare text for rating.
+        conserve_memory: Whether to conserve memory.
+    
+    Returns:
+        A list of SurvivalResult objects.
+    """
+    generate_params = generate_params or {}
+    
+    # Set seed and clear memory.
+    utils.set_seed(42)
+    utils.clear_memory()
+    
+    # Create a runner with the specified backends.
+    runner = survival_runner_factory(
+        max_attempts=max_attempts,
+        toxicity_func=toxicity_func,
+        text_prep_func=text_prep_func,
+        conserve_memory=conserve_memory,
+        generator_params=generator_params,
+        rater_params=rater_params,
+    )
+    
+    survival_results = runner.generate(
+        prompts=prompts,
+        max_attempts=prompt_attempts,
+        **generate_params
+    )
+    return list(survival_results)
+
+
+def worker_generic(
+    gpu_id: int,
+    prompts_chunk: List[str],
+    attempts_chunk: Optional[List[int]],
+    generator_params: Optional[Dict[str, Any]],
+    rater_params: Optional[Dict[str, Any]],
+    generate_params: Optional[Dict[str, Any]] = None,
+    max_attempts: int = 5,
+    toxicity_func: Optional[Callable[[Any], bool]] = None,
+    text_prep_func: Optional[Callable[[Any], str]] = None,
+    conserve_memory: bool = False,
+) -> List[SurvivalResult]:
+    """
+    Worker function to process a chunk of prompts on a specific GPU using
+    configurable generator and rater parameters.
+    
+    Args:
+        gpu_id: The GPU ID to use.
+        prompts_chunk: List of prompt strings for the worker.
+        attempts_chunk: Optional per-prompt attempt limits.
+        generator_params: Dictionary for configuring the generation backend.
+        rater_params: Dictionary for configuring the rating backend.
+        generate_params: Additional arguments for generate() call.
+        max_attempts: Global maximum attempts per prompt.
+        toxicity_func: Function to test toxicity.
+        text_prep_func: Function to prepare text before rating.
+        conserve_memory: Whether to conserve memory.
+        
+    Returns:
+        A list of SurvivalResult objects.
+    """
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    return run_survival_sampling_generic(
+        generator_params=generator_params,
+        rater_params=rater_params,
+        prompts=prompts_chunk,
+        prompt_attempts=attempts_chunk,
+        generate_params=generate_params,
+        max_attempts=max_attempts,
+        toxicity_func=toxicity_func,
+        text_prep_func=text_prep_func,
+        conserve_memory=conserve_memory,
+    )
+
+
+def generate_survival_results_generic(
+    prompts: List[str],
+    prompt_attempts: Optional[List[int]] = None,
+    generate_params: Optional[Dict[str, Any]] = None,
+    generator_params: Optional[Dict[str, Any]] = None,
+    rater_params: Optional[Dict[str, Any]] = None,
+    max_attempts: int = 5,
+    toxicity_func: Optional[Callable[[Any], bool]] = None,
+    text_prep_func: Optional[Callable[[Any], str]] = None,
+    conserve_memory: bool = False,
+    multi_gpu: bool = False,
+) -> List[SurvivalResult]:
+    """
+    Execute survival analysis in single- or multi-GPU mode using configurable generator
+    and rater parameters.
+
+    Args:
+        prompts: List of prompt strings.
+        prompt_attempts: Optional list of maximum attempts per prompt.
+        generate_params: Additional parameters for the generate() call (e.g. batch_size).
+        generator_params: Dictionary for configuring the generation backend.
+        rater_params: Dictionary for configuring the rating backend.
+        max_attempts: Global maximum attempts per prompt.
+        toxicity_func: Function to assess toxicity.
+        text_prep_func: Function to prepare text for rating.
+        conserve_memory: Whether to conserve memory.
+        multi_gpu: If True, distribute work across available GPUs.
+
+    Returns:
+        A list of SurvivalResult objects.
+
+    Raises:
+        ValueError: If the length of prompt_attempts does not match the number of prompts.
+        RuntimeError: If multi_gpu is True but no CUDA devices are found.
+    """
+    if prompt_attempts is not None and len(prompt_attempts) != len(prompts):
+        raise ValueError("prompt_attempts must have the same length as prompts")
+    
+    # Single-GPU (or CPU) execution.
+    if not multi_gpu:
+        return run_survival_sampling_generic(
+            generator_params=generator_params,
+            rater_params=rater_params,
+            prompts=prompts,
+            prompt_attempts=prompt_attempts,
+            generate_params=generate_params,
+            max_attempts=max_attempts,
+            toxicity_func=toxicity_func,
+            text_prep_func=text_prep_func,
+            conserve_memory=conserve_memory,
+        )
+    
+    # Multi-GPU execution.
+    n_gpus = torch.cuda.device_count()
+    if n_gpus == 0:
+        raise RuntimeError("No CUDA devices available for multi-GPU processing.")
+    
+    # Split prompts and prompt_attempts across GPUs.
+    prompts_chunks = [prompts[i::n_gpus] for i in range(n_gpus)]
+    attempts_chunks = (
+        [prompt_attempts[i::n_gpus] for i in range(n_gpus)]
+        if prompt_attempts is not None
+        else [None] * n_gpus
+    )
+    
+    with concurrent.futures.ProcessPoolExecutor(max_workers=n_gpus) as executor:
+        futures = [
+            executor.submit(
+                worker_generic,
+                gpu_id,
+                chunk,
+                att_chunk,
+                generator_params,
+                rater_params,
+                generate_params,
+                max_attempts,
+                toxicity_func,
+                text_prep_func,
+                conserve_memory
+            )
+            for gpu_id, chunk, att_chunk in zip(range(n_gpus), prompts_chunks, attempts_chunks)
+        ]
+        
+        results = []
+        for future in futures:
+            try:
+                results.append(future.result())
+            except Exception as e:
+                print(f"Error in worker process: {e}")
+                raise
+                
+    # Combine the results from all GPUs.
+    final_results = [result for chunk in results for result in chunk]
+    return final_results
