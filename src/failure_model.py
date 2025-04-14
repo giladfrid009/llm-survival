@@ -133,8 +133,9 @@ class ToxicClassifier(pl.LightningModule):
             if not (torch.all(p >= 0) and torch.all(p <= 1)):
                 raise ValueError("p must be in the range [0, 1]")
 
-            # Broadcast p and taus to a common shape
-            p, taus = torch.broadcast_tensors(p, taus)
+            # Broadcast p and taus so that they can be used together
+            taus = taus.view(-1, 1) if taus.dim() == 1 else taus
+            p = p.view(1, -1) if p.dim() == 1 else p
 
             # Calculate the geometric quantiles for p > 0 in a numerically stable manner.
             # torch.log1p(-x) computes log(1-x), which helps with small x values.
