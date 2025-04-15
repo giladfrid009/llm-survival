@@ -42,6 +42,7 @@ class ToxicClassifier(pl.LightningModule):
         self.config = config
         self.taus = None
         self.min_p = None
+        self.threshold = None
 
     def forward(self, x):
         inputs = self.tokenizer(x, return_tensors="pt", truncation=True, padding=True).to(self.model.device)

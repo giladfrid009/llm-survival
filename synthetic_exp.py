@@ -660,6 +660,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import tqdm
+import seaborn as sns
 
 def vary_budget_per_sample(budgets, p_cal, prop_pred_cal, n_samples_random_cal, t_tilde_cal,
                            n_conformalizations=20, min_sample_size=0, share_budget=False):
@@ -694,8 +695,8 @@ def vary_budget_per_sample(budgets, p_cal, prop_pred_cal, n_samples_random_cal, 
                 n_samples_random_cal, t_tilde_cal, budget,
                 min_sample_size=min_sample_size, share_budget=share_budget
             )
-
-            max_est = np.inf if min_sample_size==0 else max_est
+            
+            max_est = np.inf if max_est is None else max_est
             
             # Obtain the quantile estimator output.
             q_prop_conf = quantile_estimators(prop_pred, [c_prop[0]])[0].astype(int)
@@ -715,11 +716,10 @@ def vary_budget_per_sample(budgets, p_cal, prop_pred_cal, n_samples_random_cal, 
 # Define a range of budgets to test.
 budgets = np.linspace(10, 5000, 10)
 
-# Dictionary to store the results for each experimental condition.
+# Dictionary to store results for each experimental condition.
 results = {}
 
-# Define the experiments with labels and parameter settings:
-#  - (Label, min_sample_size, share_budget)
+# Define experiments with parameters: (label, min_sample_size, share_budget).
 experiments = [
     ("min_sample_size = 0", 0, False),
     ("min_sample_size = 0.1", 0.1, False),
@@ -735,30 +735,59 @@ for label, min_sample_size, share_budget in experiments:
     )
     results[label] = (cov_df, lpb_df)
 
-# Plot the results: create two subplots for coverage and LPB, each showing line plots with error bars.
+# --- Prepare Data for Seaborn ---
+
+# For Coverage: Convert each DataFrame from wide to long format
+coverage_list = []
+for label, (cov_df, _) in results.items():
+    # Reset index to turn the budget values into a column,
+    # then melt the iteration columns into a long format.
+    cov_long = cov_df.reset_index().rename(columns={'index': 'Budget'})
+    cov_melt = cov_long.melt(id_vars='Budget', var_name='Iteration', value_name='Coverage')
+    cov_melt['Experiment'] = label
+    coverage_list.append(cov_melt)
+coverage_all = pd.concat(coverage_list, ignore_index=True)
+
+# For LPB: Convert each DataFrame from wide to long format.
+lpb_list = []
+for label, (_, lpb_df) in results.items():
+    lpb_long = lpb_df.reset_index().rename(columns={'index': 'Budget'})
+    lpb_melt = lpb_long.melt(id_vars='Budget', var_name='Iteration', value_name='LPB')
+    lpb_melt['Experiment'] = label
+    lpb_list.append(lpb_melt)
+lpb_all = pd.concat(lpb_list, ignore_index=True)
+
+
+# %%
+
+# --- Plotting with Seaborn ---
+
+# Set the seaborn style.
+sns.set(style="whitegrid")
+
 plt.figure(figsize=(14, 6))
 
 # Coverage plot.
 plt.subplot(1, 2, 1)
-for label, (cov_df, _) in results.items():
-    plt.errorbar(cov_df.index, cov_df.mean(axis=1), yerr=cov_df.std(axis=1),
-                 marker='o', linestyle='-', capsize=5, label=label)
+sns.lineplot(
+    data=coverage_all, x='Budget', y='Coverage', hue='Experiment',
+    marker="o", errorbar='sd'
+)
+plt.title("Coverage vs Budget")
 plt.xlabel("Budget per Sample")
 plt.ylabel("Mean Coverage")
-plt.title("Coverage vs Budget")
-plt.legend()
 
-# LPB plot.
+# LPB plot, log scale.
 plt.subplot(1, 2, 2)
-for label, (_, lpb_df) in results.items():
-    plt.errorbar(lpb_df.index, lpb_df.mean(axis=1), yerr=lpb_df.std(axis=1),
-                 marker='o', linestyle='-', capsize=5, label=label)
+plt.yscale("log")
+sns.lineplot(
+    data=lpb_all, x='Budget', y='LPB', hue='Experiment',
+    marker="o", errorbar='sd'
+)
+plt.title("LPB vs Budget")
 plt.xlabel("Budget per Sample")
 plt.ylabel("Mean LPB")
-plt.title("LPB vs Budget")
-plt.legend()
 
 plt.tight_layout()
 plt.show()
-
 # %%
