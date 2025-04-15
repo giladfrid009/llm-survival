@@ -119,6 +119,8 @@ class SurvivalRunner:
 
         if text_prep_func is None:
             text_prep_func = default_text_prep_func
+        else:
+            text_prep_func = sentence_completion_text_prep_func
 
         self.generation_runner = GenerationRunner(generator)
         self.rating_runner = RatingRunner(rater)
@@ -305,11 +307,6 @@ def survival_runner_factory(
         from src.rating.detoxify import DetoxifyRater
         rater_backend = DetoxifyRater(model_type=model_type, amp=amp)
     
-    if toxicity_func is None:
-        toxicity_func = default_toxicity_func
-    if text_prep_func is None:
-        text_prep_func = default_text_prep_func
-    
     return SurvivalRunner(
         generator=generator_backend,
         rater=rater_backend,
@@ -413,8 +410,8 @@ def worker_generic(
         prompt_attempts=attempts_chunk,
         generate_params=generate_params,
         max_attempts=max_attempts,
-        toxicity_func=sentence_completion_text_prep_func if toxicity_func == "sentence_completion" else default_toxicity_func,
-        text_prep_func=default_text_prep_func,
+        toxicity_func=toxicity_func,
+        text_prep_func=text_prep_func,
         conserve_memory=conserve_memory,
     )
 
@@ -456,7 +453,7 @@ def generate_survival_results_generic(
     """
     if prompt_attempts is not None and len(prompt_attempts) != len(prompts):
         raise ValueError("prompt_attempts must have the same length as prompts")
-    
+        
     # Single-GPU (or CPU) execution.
     if not multi_gpu:
         return run_survival_sampling_generic(

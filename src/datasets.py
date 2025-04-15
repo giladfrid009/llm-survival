@@ -142,9 +142,11 @@ class PromptOnlyDataset(Dataset):
     def __init__(self, pkl_file: str):
         with open(pkl_file, "rb") as f:
             self.data = pickle.load(f)
+        for i in range(len(self.data)):
+            self.data[i] = self.data[i].prompt
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        return self.data[idx].prompt
+        return self.data[idx]

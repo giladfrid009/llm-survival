@@ -36,9 +36,10 @@ def sample_calibration_set(
     prior_quantile_est,
     C_probs,
     X,
-    toxicity_func=default_toxicity_func,
-    text_prep_func=default_text_prep_func,
+    toxicity_func=None,
+    text_prep_func="sentence_completion",
     batch_size=1500,
+    multi_gpu=True,
 ):
     """
     Generate a calibration set using the generic survival runner.
@@ -75,9 +76,10 @@ def sample_calibration_set(
         generator_params=generator_params,
         rater_params=rater_params,
         max_attempts=int(10e6),
-        toxicity_func="sentence_completion",
+        toxicity_func=toxicity_func,
+        text_prep_func=text_prep_func,
         conserve_memory=True,
-        multi_gpu=True,
+        multi_gpu=multi_gpu,
     )
 
     T_tilde = np.array([r.num_attempts for r in survival_results]).reshape(-1, 1)
@@ -149,9 +151,10 @@ def conformalize(
     share_budget=False,
     min_sample_size=None,
     needed_prob=1,
-    toxicity_func=default_toxicity_func,
-    text_prep_func=default_text_prep_func,
+    toxicity_func=None,
+    text_prep_func="sentence_completion",
     batch_size=1500,
+    multi_gpu=True,
 ):
     """
     Run the full conformalization procedure.
@@ -185,7 +188,6 @@ def conformalize(
     pred_raw = trainer.predict(model, dataloaders=predict_dataloader)
     quantile_est = np.vstack([p["tau"].T for p in pred_raw])
     prior_quantile_est = quantile_est[:, -1]
-    print(quantile_est.shape)
 
     max_estimator = np.inf
     if share_budget:
@@ -213,6 +215,7 @@ def conformalize(
         toxicity_func=toxicity_func,
         text_prep_func=text_prep_func,
         batch_size=batch_size,
+        multi_gpu=multi_gpu,
     )
 
     # Compute the weights – 1/conditional_probability.

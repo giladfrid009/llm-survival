@@ -1,4 +1,4 @@
-name: llm-survival2
+name: llm-survival3
 channels:
   - conda-forge
   - defaults
