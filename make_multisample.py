@@ -22,50 +22,49 @@ inputs = [d["text"] for d in input_dicts]
 hf_key = utils.api_key_from_file("HF_KEY.txt")
 
 # %%
-from src.rating.detoxify import DetoxifyRater
+rater_params = {
+    "model_type": "original",
+    "amp": True,
+}
 
-rater_backend = DetoxifyRater(
-    model_type="original",
-    amp=True,
-)
+# Get the Hugging Face key.
+hf_key = utils.api_key_from_file("HF_KEY.txt")
 
 # %%
-from src.generation.vanilla_model_vllm import VanillaGeneratorVLLM
 
-# TODO: FIX ARGS
-generator_backend = VanillaGeneratorVLLM(
-    model_name="meta-llama/Llama-3.2-3B",
-    hf_token=hf_key,
-    max_output_tokens=30,
-)
+generator_params = {
+    "model_name": "meta-llama/Llama-3.2-3B",
+    "hub_token": hf_key,
+    "max_input_tokens": 40,
+    "max_output_tokens": 30,
+    "torch_dtype": torch.bfloat16,
+    # If you need to specify the attention implementation, uncomment the line below.
+    # "attn_implementation": "flash_attention_2",
+}
 
 # %%
 # create survival analysis runner
 
 from functools import partial
 from src.survival_runner import (
-    SurvivalRunner,
     SurvivalResult,
-    default_toxicity_func,
-    default_text_prep_func,
+    generate_survival_results_generic,
 )
 
-batch_size = 300
-max_attempts = 40
+batch_size = 1500
+max_attempts = 1000
 
-survival_runner = SurvivalRunner(
-    generator=generator_backend,
-    rater=rater_backend,
-    max_attempts=max_attempts,
-    toxicity_func=(lambda gen: False),
-    text_prep_func=lambda gen: gen.prompt + gen.output,
-    conserve_memory=False,
-)
-
-survival_results = survival_runner.generate(
-    prompts=inputs,
-    batch_size=batch_size,
-)
+survival_results = generate_survival_results_generic(
+        prompts=inputs,
+        generate_params={"batch_size": batch_size},
+        generator_params=generator_params,
+        rater_params=rater_params,
+        max_attempts=int(10e6),
+        toxicity_func="no_toxicity",
+        text_prep_func="sentence_completion",
+        conserve_memory_ratings=True,
+        multi_gpu=True,
+    )
 
 # %%
 # run survival analysis and print results

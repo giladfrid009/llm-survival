@@ -98,12 +98,14 @@ class LlamaGuardRater(RatingBackend, GenerationBackend):
         results = [GenerationResult(prompt=prompt, output=output.outputs[0].text.strip()) for prompt, output in zip(prompts, outputs)]
         return results
 
-    def rate(self, text: str, **kwargs) -> RatingResult:
+    def rate(self, text: str, conserve_memory: bool = False,
+              **kwargs) -> RatingResult:
         response = self.generate(prompt=text, **kwargs)
-        ratings = RatingResult(text, self.calc_scores(response))
+        ratings = RatingResult(None if conserve_memory else text, self.calc_scores(response))
         return ratings
 
-    def rate_batch(self, texts: list[str], **kwargs) -> list[RatingResult]:
+    def rate_batch(self, texts: list[str], conserve_memory: bool = False,
+                   **kwargs) -> list[RatingResult]:
         responses = self.generate_batch(prompts=texts, **kwargs)
-        ratings = [RatingResult(text, self.calc_scores(resp)) for text, resp in zip(texts, responses)]
+        ratings = [RatingResult(None if conserve_memory else text, self.calc_scores(resp)) for text, resp in zip(texts, responses)]
         return ratings

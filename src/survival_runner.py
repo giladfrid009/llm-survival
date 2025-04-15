@@ -1,3 +1,4 @@
+from calendar import c
 from dataclasses import dataclass, field
 import time
 import datetime
@@ -104,6 +105,7 @@ class SurvivalRunner:
         toxicity_func: Callable[[RatingResult], bool] = default_toxicity_func,
         text_prep_func: Callable[[GenerationResult], str] = default_text_prep_func,
         conserve_memory: bool = False,
+        conserve_memory_ratings: bool = False,
     ):
         """
         Args:
@@ -116,7 +118,8 @@ class SurvivalRunner:
         """
         if toxicity_func is None:
             toxicity_func = default_toxicity_func
-
+        else:
+            toxicity_func = (lambda x: False)
         if text_prep_func is None:
             text_prep_func = default_text_prep_func
         else:
@@ -128,6 +131,7 @@ class SurvivalRunner:
         self.text_prep_func = text_prep_func
         self.max_attempts = max_attempts
         self.conserve_memory = conserve_memory
+        self.conserve_memory_ratings = conserve_memory_ratings
 
         # Keep track of latest task ID.
         self.current_task_id: int = 0
@@ -222,7 +226,7 @@ class SurvivalRunner:
 
                 # Rate the generated texts.
                 texts_to_rate = [self.text_prep_func(gen) for gen in gen_results]
-                rate_results = self.rating_runner.rate_batch(texts_to_rate)
+                rate_results = self.rating_runner.rate_batch(texts_to_rate, self.conserve_memory_ratings)
 
                 # Update tasks and yield finished ones.
                 for task, rating in zip(active_tasks, rate_results):
@@ -262,6 +266,7 @@ def survival_runner_factory(
     toxicity_func: Optional[Callable[[Any], bool]] = None,
     text_prep_func: Optional[Callable[[Any], str]] = None,
     conserve_memory: bool = False,
+    conserve_memory_ratings: bool = False,
     generator_params: Optional[Dict[str, Any]] = None,
     rater_params: Optional[Dict[str, Any]] = None,
 ) -> SurvivalRunner:
@@ -314,6 +319,7 @@ def survival_runner_factory(
         toxicity_func=toxicity_func,
         text_prep_func=text_prep_func,
         conserve_memory=conserve_memory,
+        conserve_memory_ratings=conserve_memory_ratings,
     )
 
 
@@ -327,6 +333,7 @@ def run_survival_sampling_generic(
     toxicity_func: Optional[Callable[[Any], bool]] = None,
     text_prep_func: Optional[Callable[[Any], str]] = None,
     conserve_memory: bool = False,
+    conserve_memory_ratings: bool = False,
 ) -> List[SurvivalResult]:
     """
     Run survival analysis using configurable generator and rater parameters.
@@ -357,6 +364,7 @@ def run_survival_sampling_generic(
         toxicity_func=toxicity_func,
         text_prep_func=text_prep_func,
         conserve_memory=conserve_memory,
+        conserve_memory_ratings=conserve_memory_ratings,
         generator_params=generator_params,
         rater_params=rater_params,
     )
@@ -380,6 +388,7 @@ def worker_generic(
     toxicity_func: Optional[str] = None,
     text_prep_func: Optional[str] = None,
     conserve_memory: bool = False,
+    conserve_memory_ratings: bool = False,
 ) -> List[SurvivalResult]:
     """
     Worker function to process a chunk of prompts on a specific GPU using
@@ -413,6 +422,7 @@ def worker_generic(
         toxicity_func=toxicity_func,
         text_prep_func=text_prep_func,
         conserve_memory=conserve_memory,
+        conserve_memory_ratings=conserve_memory_ratings,
     )
 
 
@@ -426,6 +436,7 @@ def generate_survival_results_generic(
     toxicity_func: Optional[Callable[[Any], bool]] = None,
     text_prep_func: Optional[Callable[[Any], str]] = None,
     conserve_memory: bool = False,
+    conserve_memory_ratings: bool = False,
     multi_gpu: bool = False,
 ) -> List[SurvivalResult]:
     """
@@ -466,6 +477,7 @@ def generate_survival_results_generic(
             toxicity_func=toxicity_func,
             text_prep_func=text_prep_func,
             conserve_memory=conserve_memory,
+            conserve_memory_ratings=conserve_memory_ratings,
         )
     
     # Multi-GPU execution.
@@ -474,7 +486,11 @@ def generate_survival_results_generic(
         raise RuntimeError("No CUDA devices available for multi-GPU processing.")
     
     # Split prompts and prompt_attempts across GPUs.
-    prompts_chunks = [prompts.data[i::n_gpus] for i in range(n_gpus)]
+    prompts = prompts if isinstance(prompts, list) else prompts.data
+    prompts_chunks = [prompts[i::n_gpus] for i in range(n_gpus)]
+    print("Length of prompts:", len(prompts))
+    print("Length of prompts_chunks:", len(prompts_chunks))
+    print("Length of each chunk:", [len(chunk) for chunk in prompts_chunks])
     attempts_chunks = (
         [prompt_attempts[i::n_gpus] for i in range(n_gpus)]
         if prompt_attempts is not None
@@ -494,7 +510,8 @@ def generate_survival_results_generic(
                 max_attempts,
                 toxicity_func,
                 text_prep_func,
-                conserve_memory
+                conserve_memory,
+                conserve_memory_ratings,
             )
             for gpu_id, chunk, att_chunk in zip(range(n_gpus), prompts_chunks, attempts_chunks)
         ]

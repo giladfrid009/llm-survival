@@ -64,7 +64,8 @@ class PerspectiveRater(RatingBackend):
                 time.sleep(min_interval - elapsed)
             self._last_request_time = time.time()
 
-    def rate(self, text: str, **kwargs) -> RatingResult:
+    def rate(self, text: str, conserve_memory: bool = False,
+             **kwargs) -> RatingResult:
 
         self._enforce_rate_limit()
 
@@ -87,4 +88,4 @@ class PerspectiveRater(RatingBackend):
             score_value = summary_scores.get("value")
             scores[attr.lower()] = score_value
 
-        return RatingResult(text, scores=scores)
+        return RatingResult(None if conserve_memory else text, scores=scores)

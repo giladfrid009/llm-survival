@@ -29,7 +29,8 @@ class RatingBackend(ABC):
     """
 
     @abstractmethod
-    def rate(self, text: str, **kwargs) -> RatingResult:
+    def rate(self, text: str, conserve_memory: bool = False,
+              **kwargs) -> RatingResult:
         """
         Compute a score for the given text.
 
@@ -42,7 +43,8 @@ class RatingBackend(ABC):
         """
         pass
 
-    def rate_batch(self, texts: list[str], **kwargs) -> list[RatingResult]:
+    def rate_batch(self, texts: list[str], conserve_memory: bool = False,
+                    **kwargs) -> list[RatingResult]:
         """
         Rate a batch of texts sequentially by calling `rate()` for each.
 
@@ -53,7 +55,7 @@ class RatingBackend(ABC):
         Returns:
             list[RatingResult]: The results for each text.
         """
-        return [self.rate(text, **kwargs) for text in texts]
+        return [self.rate(text, conserve_memory, **kwargs) for text in texts]
 
 
 class RatingRunner:
@@ -81,7 +83,8 @@ class RatingRunner:
         """
         return self.backend.rate(text, **kwargs)
 
-    def rate_batch(self, texts: list[str], **kwargs) -> list[RatingResult]:
+    def rate_batch(self, texts: list[str], conserve_memory: bool = False,
+                    **kwargs) -> list[RatingResult]:
         """
         Rate a batch of texts.
 
@@ -94,7 +97,7 @@ class RatingRunner:
         """
         if len(texts) == 0:
             return []
-        return self.backend.rate_batch(texts, **kwargs)
+        return self.backend.rate_batch(texts, conserve_memory, **kwargs)
 
     def rate_stram(self, texts: Iterable[str], batch_size: int = 100, **kwargs) -> Iterator[RatingResult]:
         """
