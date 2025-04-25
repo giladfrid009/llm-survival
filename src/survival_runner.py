@@ -6,6 +6,7 @@ from typing import List, Optional, Callable, Dict, Iterable, Iterator,Any
 import os
 import torch
 import concurrent.futures
+import pickle
 
 from tqdm.auto import tqdm
 from src import utils
@@ -158,105 +159,121 @@ class SurvivalRunner:
     def generate(
         self,
         prompts: Iterable[str],
-        max_attempts: list[int] | None = None,
+        prompt_ids: Optional[Iterable[int]] = None,      # ← NEW
+        max_attempts: Optional[List[int]] = None,        # per-prompt attempt limits
         batch_size: int = 10,
+        checkpoint_file: Optional[str] = None,
         **kwargs,
     ) -> Iterator[SurvivalResult]:
         """
-        Lazily processes a stream of prompts. For each prompt, generation and rating are performed
-        until an acceptable output is produced or the maximum number of attempts is reached.
-        Each finished prompt is yielded as a SurvivalResult.
+        Yields SurvivalResult for each prompt, stopping when either
+        the toxicity criterion is met or max_attempts[idx] is reached.
 
         Args:
-            prompts (Iterable[str]): An iterable of prompt strings.
-            batch_size (int, optional): Number of prompts to process concurrently.
-            max_attempts (list[int] | None, optional): Per-sample maximum number of attempts.
-                If not None, for prompt `i` uses `min(max_attempts[i], self.max_attempts)`.
-                If None, uses `self.max_attempts` for all prompts.
-            **kwargs: Additional keyword arguments passed to the generation backend.
-
-        Yields:
-            SurvivalResult: A finished result for a prompt.
+            prompts: sequence of prompt strings
+            prompt_ids: sequence of external IDs (must align 1:1 with prompts)
+            max_attempts: optional list of per-prompt max_attempts (overrides self.max_attempts)
+            batch_size: number of concurrent in-flight prompts
+            checkpoint_file: optional path to resume from previous run
+            **kwargs: passed through to generation_runner.generate_batch
         """
+        # --- 1) Load & yield any checkpointed results ---
+        completed_results: List[SurvivalResult] = []
+        if checkpoint_file and os.path.exists(checkpoint_file):
+            with open(checkpoint_file, 'rb') as f:
+                completed_results = pickle.load(f)
+            for task in completed_results:
+                yield task
 
+        # --- 2) Prepare prompt_ids default ---
+        if prompt_ids is None:
+            if isinstance(prompts, list):
+                prompt_ids = list(range(len(prompts)))
+            else:
+                prompt_ids = []
+
+        # --- 3) Skip already-done prompts by ID ---
+        if checkpoint_file and isinstance(prompts, list) and completed_results:
+            processed_ids = {r.id for r in completed_results}
+            pairs = [(pid, p) for pid, p in zip(prompt_ids, prompts) if pid not in processed_ids]
+            if pairs:
+                prompt_ids, prompts = zip(*pairs)
+                prompt_ids, prompts = list(prompt_ids), list(prompts)
+            else:
+                prompt_ids, prompts = [], []
+
+        # --- 4) Clear memory & reset ---
         utils.clear_memory()
+        self.current_task_id = len(completed_results)
 
-        self.current_task_id = 0
-        prompt_iter = iter(prompts)
-        active_tasks: list[SurvivalResult] = []
+        # --- 5) Iterate in batches, carrying (pid, prompt) ---
+        prompt_iter = iter(zip(prompt_ids, prompts))
+        active_tasks: List[SurvivalResult] = []
 
         def fill_tasks() -> None:
-            # Fill active tasks up to the desired batch size.
             while len(active_tasks) < batch_size:
                 try:
-                    prompt = next(prompt_iter)
+                    pid, prompt = next(prompt_iter)
                 except StopIteration:
                     break
-
-                attempts = self.max_attempts if max_attempts is None else min(max_attempts[self.current_task_id], self.max_attempts)
-
-                new_task = SurvivalResult(
-                    id=self.current_task_id,
+                # decide per-prompt attempts
+                attempts = (
+                    self.max_attempts
+                    if max_attempts is None
+                    else min(max_attempts[pid], self.max_attempts)
+                )
+                task = SurvivalResult(
+                    id=pid,
                     prompt=prompt,
                     max_attempts=attempts,
                     num_attempts=0,
                 )
-
-                active_tasks.append(new_task)
+                active_tasks.append(task)
                 self.current_task_id += 1
 
         fill_tasks()
 
+        total = len(prompts) if hasattr(prompts, "__len__") else None
         batch_timer = utils.RunningAverage(window_size=10)
-        total_length = len(prompts) if hasattr(prompts, "__len__") else None
-        with tqdm(total=total_length, desc="Processing Prompts") as pbar:
+        with tqdm(total=(total or 0) + len(completed_results), desc="Processing Prompts") as pbar:
+            pbar.update(len(completed_results))
 
             while active_tasks:
-
-                start_time = time.time()
-
-                # Batch of tasks for the next iteration.
-                next_tasks: list[SurvivalResult] = []
-
-                # Generate output text for all active tasks.
-                gen_results = self.generation_runner.generate_batch(
-                    prompts=[task.prompt for task in active_tasks],
-                    **kwargs,
+                start = time.time()
+                # 1) generate
+                gens = self.generation_runner.generate_batch(
+                    prompts=[t.prompt for t in active_tasks], **kwargs
                 )
-
-                # Rate the generated texts.
-                texts_to_rate = [self.text_prep_func(gen) for gen in gen_results]
-                rate_results = self.rating_runner.rate_batch(texts_to_rate, self.conserve_memory_ratings)
-
-                # Update tasks and yield finished ones.
-                for task, rating in zip(active_tasks, rate_results):
-                    finished = self.update_task(task, rating)
-                    if finished:
+                texts = [self.text_prep_func(g) for g in gens]
+                # 2) rate
+                rates = self.rating_runner.rate_batch(texts, self.conserve_memory_ratings)
+                # 3) update
+                next_tasks: List[SurvivalResult] = []
+                for task, rating in zip(active_tasks, rates):
+                    done = self.update_task(task, rating)
+                    if done:
+                        if checkpoint_file:
+                            completed_results.append(task)
+                            with open(checkpoint_file, 'wb') as f:
+                                pickle.dump(completed_results, f)
                         yield task
                         pbar.update(1)
                     else:
                         next_tasks.append(task)
 
-                # prepare for next iteration
                 active_tasks = next_tasks
                 fill_tasks()
 
-                # update pbar metrics
-                batch_timer.update(time.time() - start_time)
+                # update ETA
+                batch_timer.update(time.time() - start)
                 metrics = {
                     "batch_num": f"{batch_timer.global_count}",
                     "batch_time": f"{batch_timer.window_average:.2f}",
                 }
-
-                if total_length is not None:
-                    items_left = total_length - pbar.n
-                    seconds_left = (
-                        batch_timer.window_average
-                        * (items_left / batch_size)
-                        * (self.max_attempts if (isinstance(self.max_attempts, int) or isinstance(self.max_attempts, float)) else self.max_attempts.max())
-                    )
-                    metrics.update({"time_remaining": datetime.timedelta(seconds=int(seconds_left))})
-
+                if total is not None:
+                    left = total - (pbar.n - len(completed_results))
+                    secs = batch_timer.window_average * (left / batch_size) * self.max_attempts
+                    metrics["time_remaining"] = datetime.timedelta(seconds=int(secs))
                 pbar.set_postfix(metrics)
 
 def survival_runner_factory(
@@ -327,6 +344,7 @@ def run_survival_sampling_generic(
     generator_params: Optional[Dict[str, Any]],
     rater_params: Optional[Dict[str, Any]],
     prompts: List[str],
+    prompt_ids: Optional[List[int]] = None,       # ← NEW
     prompt_attempts: Optional[List[int]] = None,
     generate_params: Optional[Dict[str, Any]] = None,
     max_attempts: int = 5,
@@ -336,29 +354,13 @@ def run_survival_sampling_generic(
     conserve_memory_ratings: bool = False,
 ) -> List[SurvivalResult]:
     """
-    Run survival analysis using configurable generator and rater parameters.
-
-    Args:
-        generator_params: Dictionary for configuring the generation backend.
-        rater_params: Dictionary for configuring the rating backend.
-        prompts: List of prompt strings.
-        prompt_attempts: Optional per-prompt maximum attempts.
-        generate_params: Additional parameters for the runner's generate() call (e.g. batch_size).
-        max_attempts: Global maximum attempts per prompt.
-        toxicity_func: Function to determine toxicity.
-        text_prep_func: Function to prepare text for rating.
-        conserve_memory: Whether to conserve memory.
-    
-    Returns:
-        A list of SurvivalResult objects.
+    Single‐process survival sampler: sets seed, builds runner, calls generate().
     """
     generate_params = generate_params or {}
-    
-    # Set seed and clear memory.
+
     utils.set_seed(42)
     utils.clear_memory()
-    
-    # Create a runner with the specified backends.
+
     runner = survival_runner_factory(
         max_attempts=max_attempts,
         toxicity_func=toxicity_func,
@@ -368,54 +370,37 @@ def run_survival_sampling_generic(
         generator_params=generator_params,
         rater_params=rater_params,
     )
-    
-    survival_results = runner.generate(
+
+    results = runner.generate(
         prompts=prompts,
+        prompt_ids=prompt_ids,
         max_attempts=prompt_attempts,
-        **generate_params
+        **generate_params,
     )
-    return list(survival_results)
+    return list(results)
 
 
 def worker_generic(
     gpu_id: int,
     prompts_chunk: List[str],
+    ids_chunk: Optional[List[int]],             # ← NEW
     attempts_chunk: Optional[List[int]],
     generator_params: Optional[Dict[str, Any]],
     rater_params: Optional[Dict[str, Any]],
     generate_params: Optional[Dict[str, Any]] = None,
     max_attempts: int = 5,
-    toxicity_func: Optional[str] = None,
-    text_prep_func: Optional[str] = None,
+    toxicity_func: Optional[Callable[[Any], bool]] = None,
+    text_prep_func: Optional[Callable[[Any], str]] = None,
     conserve_memory: bool = False,
     conserve_memory_ratings: bool = False,
 ) -> List[SurvivalResult]:
-    """
-    Worker function to process a chunk of prompts on a specific GPU using
-    configurable generator and rater parameters.
-    
-    Args:
-        gpu_id: The GPU ID to use.
-        prompts_chunk: List of prompt strings for the worker.
-        attempts_chunk: Optional per-prompt attempt limits.
-        generator_params: Dictionary for configuring the generation backend.
-        rater_params: Dictionary for configuring the rating backend.
-        generate_params: Additional arguments for generate() call.
-        max_attempts: Global maximum attempts per prompt.
-        toxicity_func: Function to test toxicity.
-        text_prep_func: Function to prepare text before rating.
-        conserve_memory: Whether to conserve memory.
-        
-    Returns:
-        A list of SurvivalResult objects.
-    """
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-    print("Currently using GPU ID for survival sampling:", gpu_id)
-    print("Length of prompts_chunk:", len(prompts_chunk))
+    print("GPU", gpu_id, "processing", len(prompts_chunk), "prompts")
     return run_survival_sampling_generic(
         generator_params=generator_params,
         rater_params=rater_params,
         prompts=prompts_chunk,
+        prompt_ids=ids_chunk,
         prompt_attempts=attempts_chunk,
         generate_params=generate_params,
         max_attempts=max_attempts,
@@ -428,6 +413,7 @@ def worker_generic(
 
 def generate_survival_results_generic(
     prompts: List[str],
+    prompt_ids: Optional[List[int]] = None,    # ← NEW
     prompt_attempts: Optional[List[int]] = None,
     generate_params: Optional[Dict[str, Any]] = None,
     generator_params: Optional[Dict[str, Any]] = None,
@@ -440,37 +426,22 @@ def generate_survival_results_generic(
     multi_gpu: bool = False,
 ) -> List[SurvivalResult]:
     """
-    Execute survival analysis in single- or multi-GPU mode using configurable generator
-    and rater parameters.
-
-    Args:
-        prompts: List of prompt strings.
-        prompt_attempts: Optional list of maximum attempts per prompt.
-        generate_params: Additional parameters for the generate() call (e.g. batch_size).
-        generator_params: Dictionary for configuring the generation backend.
-        rater_params: Dictionary for configuring the rating backend.
-        max_attempts: Global maximum attempts per prompt.
-        toxicity_func: Function to assess toxicity.
-        text_prep_func: Function to prepare text for rating.
-        conserve_memory: Whether to conserve memory.
-        multi_gpu: If True, distribute work across available GPUs.
-
-    Returns:
-        A list of SurvivalResult objects.
-
-    Raises:
-        ValueError: If the length of prompt_attempts does not match the number of prompts.
-        RuntimeError: If multi_gpu is True but no CUDA devices are found.
+    Top‐level entrypoint: single‐ or multi‐GPU.  Preserves `prompt_ids` ordering.
     """
+    if prompt_ids is not None and len(prompt_ids) != len(prompts):
+        raise ValueError("prompt_ids must have same length as prompts")
     if prompt_attempts is not None and len(prompt_attempts) != len(prompts):
-        raise ValueError("prompt_attempts must have the same length as prompts")
-        
-    # Single-GPU (or CPU) execution.
+        raise ValueError("prompt_attempts must have same length as prompts")
+
+    generate_params = generate_params or {}
+
+    # --- Single‐GPU / CPU ---
     if not multi_gpu:
         return run_survival_sampling_generic(
             generator_params=generator_params,
             rater_params=rater_params,
             prompts=prompts,
+            prompt_ids=prompt_ids,
             prompt_attempts=prompt_attempts,
             generate_params=generate_params,
             max_attempts=max_attempts,
@@ -479,31 +450,32 @@ def generate_survival_results_generic(
             conserve_memory=conserve_memory,
             conserve_memory_ratings=conserve_memory_ratings,
         )
-    
-    # Multi-GPU execution.
+
+    # --- Multi‐GPU ---
     n_gpus = torch.cuda.device_count()
     if n_gpus == 0:
         raise RuntimeError("No CUDA devices available for multi-GPU processing.")
-    
-    # Split prompts and prompt_attempts across GPUs.
-    prompts = prompts if isinstance(prompts, list) else prompts.data
+
     prompts_chunks = [prompts[i::n_gpus] for i in range(n_gpus)]
-    print("Length of prompts:", len(prompts))
-    print("Length of prompts_chunks:", len(prompts_chunks))
-    print("Length of each chunk:", [len(chunk) for chunk in prompts_chunks])
+    ids_chunks = (
+        [prompt_ids[i::n_gpus] for i in range(n_gpus)]
+        if prompt_ids is not None
+        else [None] * n_gpus
+    )
     attempts_chunks = (
         [prompt_attempts[i::n_gpus] for i in range(n_gpus)]
         if prompt_attempts is not None
         else [None] * n_gpus
     )
-    
+
     with concurrent.futures.ProcessPoolExecutor(max_workers=n_gpus) as executor:
         futures = [
             executor.submit(
                 worker_generic,
                 gpu_id,
-                chunk,
-                att_chunk,
+                prompts_chunks[gpu_id],
+                ids_chunks[gpu_id],
+                attempts_chunks[gpu_id],
                 generator_params,
                 rater_params,
                 generate_params,
@@ -513,17 +485,11 @@ def generate_survival_results_generic(
                 conserve_memory,
                 conserve_memory_ratings,
             )
-            for gpu_id, chunk, att_chunk in zip(range(n_gpus), prompts_chunks, attempts_chunks)
+            for gpu_id in range(n_gpus)
         ]
-        
-        results = []
-        for future in futures:
-            try:
-                results.append(future.result())
-            except Exception as e:
-                print(f"Error in worker process: {e}")
-                raise
-                
-    # Combine the results from all GPUs.
-    final_results = [result for chunk in results for result in chunk]
-    return final_results
+
+        results = [f.result() for f in futures]
+
+    # flatten
+    final = [res for sub in results for res in sub]
+    return final

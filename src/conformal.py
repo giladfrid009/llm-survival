@@ -83,6 +83,12 @@ def sample_calibration_set(
     )
 
     T_tilde = np.array([r.num_attempts for r in survival_results]).reshape(-1, 1)
+    ids = np.array([r.id for r in survival_results])
+
+    # Sort the results by the original order of X.
+    sorted_indices = np.argsort(ids)
+    T_tilde = T_tilde[sorted_indices]
+    C = C[sorted_indices]
     return T_tilde, C
 
 def constraint_violation(lambda_val, w, b):
@@ -221,14 +227,13 @@ def conformalize(
     # Compute the weights – 1/conditional_probability.
     weights = 1 / C_probs.reshape(-1, 1)
     weights = np.where(quantile_est <= C, weights, 0)
-    print(weights)
 
     T_tilde_miscoverage = np.where(T_tilde < quantile_est, 1, 0)
-    print(T_tilde_miscoverage)
+    print(f"Mean empirical coverage before weighting is {T_tilde_miscoverage.mean(axis=0)}")
 
     # Compute the estimated miscoverage for each quantile.
     tau_hats = (weights * T_tilde_miscoverage).sum(axis=0) / weights.sum(axis=0)
-    print(tau_hats)
+    print(f"Reweighted estimated coverage {tau_hats}")
 
     tau_diff = target_taus - tau_hats[:, np.newaxis]
     smallest_pos = np.where(tau_diff > 0, 1, -1.0 * np.inf).cumsum(axis=0).argmax(axis=0)
