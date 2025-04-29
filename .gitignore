@@ -1,6 +1,11 @@
+test.ipynb
+test2.ipynb
+test3.ipynb
+
 PERSPECTIVE_API_KEY.txt
 HF_KEY.txt
-data
+data/rtp_40
+data/rtp_500
 survival_results.pkl
 .vscode
 saved
