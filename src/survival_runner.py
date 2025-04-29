@@ -176,7 +176,11 @@ class SurvivalRunner:
             batch_size: number of concurrent in-flight prompts
             checkpoint_file: optional path to resume from previous run
             **kwargs: passed through to generation_runner.generate_batch
-        """
+        """                
+        
+        if max_attempts is None:
+            max_attempts = [self.max_attempts] * len(prompts)
+        
         # --- 1) Load & yield any checkpointed results ---
         completed_results: List[SurvivalResult] = []
         if checkpoint_file and os.path.exists(checkpoint_file):
@@ -207,39 +211,54 @@ class SurvivalRunner:
         self.current_task_id = len(completed_results)
 
         # --- 5) Iterate in batches, carrying (pid, prompt) ---
-        prompt_iter = iter(zip(prompt_ids, prompts))
+        prompt_iter = iter(zip(prompt_ids, prompts, max_attempts))
         active_tasks: List[SurvivalResult] = []
-
-        def fill_tasks() -> None:
-            while len(active_tasks) < batch_size:
+        
+        def fill_tasks() -> None:            
+            while len(active_tasks) < batch_size:   
                 try:
-                    pid, prompt = next(prompt_iter)
+                    pid, prompt, cur_max_attempts = next(prompt_iter)
                 except StopIteration:
                     break
                 # decide per-prompt attempts
-                attempts = (
-                    self.max_attempts
-                    if max_attempts is None
-                    else min(max_attempts[pid], self.max_attempts)
-                )
+                attempts = min(cur_max_attempts, self.max_attempts)
+                
                 task = SurvivalResult(
                     id=pid,
                     prompt=prompt,
                     max_attempts=attempts,
                     num_attempts=0,
                 )
+                
                 active_tasks.append(task)
                 self.current_task_id += 1
 
         fill_tasks()
-
+        
         total = len(prompts) if hasattr(prompts, "__len__") else None
         batch_timer = utils.RunningAverage(window_size=10)
         with tqdm(total=(total or 0) + len(completed_results), desc="Processing Prompts") as pbar:
+            
             pbar.update(len(completed_results))
 
             while active_tasks:
                 start = time.time()
+                
+                # # 0) remove tasks that are already done
+                clean_active_tasks = []
+                for task in active_tasks:
+                    if task.num_attempts >= task.max_attempts or task.is_toxic or task.max_attempts <= 0:
+                        completed_results.append(task)
+                        if checkpoint_file:
+                            with open(checkpoint_file, 'wb') as f:
+                                pickle.dump(completed_results, f)
+                        yield task
+                        pbar.update(1)
+                    else:
+                        clean_active_tasks.append(task)
+                
+                active_tasks = clean_active_tasks
+                
                 # 1) generate
                 gens = self.generation_runner.generate_batch(
                     prompts=[t.prompt for t in active_tasks], **kwargs
@@ -275,6 +294,7 @@ class SurvivalRunner:
                     secs = batch_timer.window_average * (left / batch_size) * self.max_attempts
                     metrics["time_remaining"] = datetime.timedelta(seconds=int(secs))
                 pbar.set_postfix(metrics)
+            
 
 def survival_runner_factory(
     generator_backend: Optional[Any] = None,

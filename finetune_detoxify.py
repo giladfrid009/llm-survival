@@ -78,10 +78,11 @@ def cli_main():
     
     # model
     model = ToxicClassifier(config)
+    model = model.train()
 
     # training
     checkpoint_callback = ModelCheckpoint(
-        save_top_k=3,
+        save_top_k=1,
         verbose=True,
         monitor="val_ce",
         mode="min",
@@ -100,6 +101,7 @@ def cli_main():
         default_root_dir="saved/" + config["name"],
         deterministic=True,
     )
+    
     trainer.fit(
         model=model,
         train_dataloaders=data_loader,

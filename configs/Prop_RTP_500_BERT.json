@@ -1,15 +1,15 @@
 {
-    "name": "Prop_rtp_500_ModernBERT",
-    "batch_size": 500,
+    "name": "Jigsaw_BERT",
+    "batch_size": 256,
     "accumulate_grad_batches": 1,
     "loss": "prop_loss",
     "arch": {
-        "type": "ModernBERT",
+        "type": "BERT",
         "args": {
-            "num_classes": 2,
-            "model_type": "answerdotai/ModernBERT-base",
-            "model_name": "ModernBertForSequenceClassification",
-            "tokenizer_name": "AutoTokenizer"
+            "num_classes": 6,
+            "model_type": "unitary/toxic-bert",
+            "model_name": "BertForSequenceClassification",
+            "tokenizer_name": "BertTokenizer"
         }
     },
     "dataset": {
@@ -38,7 +38,7 @@
     "optimizer": {
         "type": "Adam",
         "args": {
-            "lr": 3e-5
+            "lr": 3e-05
         }
     }
 }
