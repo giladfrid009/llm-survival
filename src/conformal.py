@@ -14,12 +14,12 @@ from torch.utils.data import DataLoader  # Import DataLoader
 import math
 import matplotlib.pyplot as plt
 
-def geom_cdf_stable(p, k):
+def geom_cdf_stable(p: float, k: np.ndarray):
     """
     Numerically stable CDF of Geometric(p) at k (support 1,2,3,...).
     """
     # computes 1 - (1-p)^k accuratly
-    cdf: np.ndarray = -np.expm1(k * np.log1p(-p))
+    cdf = -np.expm1(k * np.log1p(-p))
     return cdf.clip(0, 1)
 
 
@@ -215,7 +215,7 @@ def conformalize(
 
     if naive:
         p_C = 1 / budget_per_sample
-        C_probs = 1 - geom_cdf_stable(p=p_C, k=quantile_est)
+        C_probs = 1 - geom_cdf_stable(p=p_C, k=prior_quantile_est)
     elif share_budget:
         min_sample_size = min_sample_size if min_sample_size else 0
         max_estimator = min(max_estimator, int(budget_per_sample / min_sample_size) if min_sample_size else np.inf)
@@ -250,7 +250,7 @@ def conformalize(
     
     # Compute the estimated miscoverage for each quantile.
     miscoverage_unweighted = np.where(T_tilde < quantile_est, 1, 0)
-    miscoverage = (weights * miscoverage_unweighted).sum(axis=0) / weights.sum(axis=0)
+    miscoverage = (weights * miscoverage_unweighted).mean(axis=0)
 
     tau_diff = target_taus - miscoverage[:, np.newaxis]
     smallest_pos = np.where(tau_diff > 0, 1, -1.0 * np.inf).cumsum(axis=0).argmax(axis=0)
