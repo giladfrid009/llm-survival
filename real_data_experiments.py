@@ -13,12 +13,6 @@ import pandas as pd
 import os
 import sys
 
-torch._dynamo.config.suppress_errors = True
-
-try:
-    torch.multiprocessing.set_start_method("spawn")
-except RuntimeError:
-    pass
 
 DS_CAL_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
 DS_TEST_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl"
@@ -50,13 +44,17 @@ target_tau_idx = torch.argmin(torch.abs(TAUS_RANGE - TARGET_TAUS))
 # name, min_sample_size, share_budget, naive
 EXPERIMENTS = [
     ("Fixed Budgeting", None, False, True),
-    ("Adaptive Budgeting", None, False, False),
-    ("Capped Adaptive Budgeting", 0.5, False, False),
-    ("Global Budgeting", 0.5, True, False),
+    # ("Adaptive Budgeting", None, False, False),
+    # ("Capped Adaptive Budgeting", 0.5, False, False),
+    # ("Global Budgeting", 0.5, True, False),
 ]
 
-NUM_RUNS = 5
-BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
+# NUM_RUNS = 5
+# BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
+
+NUM_RUNS = 1
+BUDGET_RANGE = [10]
+
 SAVE_PATH = "results.csv"
 
 
@@ -118,10 +116,8 @@ def print_result(result_dict):
     print("-" * 60)
 
 
-if __name__ == "__main__":
-
+def run_experiments():
     print_config()
-
     validate_save_path(SAVE_PATH)
 
     # load data
@@ -241,3 +237,13 @@ if __name__ == "__main__":
                 results_df = pd.concat([results_df, pd.DataFrame([result_dict])], ignore_index=True)
 
                 save_results(SAVE_PATH, results_df)
+
+
+def main():
+    torch._dynamo.config.suppress_errors = True
+    torch.multiprocessing.set_start_method("spawn", force=True)
+    run_experiments()
+
+
+if __name__ == "__main__":
+    main()

@@ -12,6 +12,7 @@ from tqdm.auto import tqdm
 from src import utils
 from src.generation.base import GenerationBackend, GenerationResult, GenerationRunner
 from src.rating.base import RatingBackend, RatingResult, RatingRunner
+from multiprocessing import get_context
 
 
 @dataclass
@@ -488,7 +489,8 @@ def generate_survival_results_generic(
         else [None] * n_gpus
     )
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=n_gpus) as executor:
+    ctx = get_context("spawn") # NEW
+    with concurrent.futures.ProcessPoolExecutor(max_workers=n_gpus, mp_context=ctx) as executor:
         futures = [
             executor.submit(
                 worker_generic,
