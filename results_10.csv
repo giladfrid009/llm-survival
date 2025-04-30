@@ -1,0 +1,2 @@
+experiment,budget,run_num,tau_hat,max_est,calib_tau_hat_miscoverage,calib_tau_target_miscoverage,calib_mean_generated_samples,calib_mean_c_value,test_tau_hat_lpb,test_tau_target_lpb,time_delta
+Global Budgeting High,599,0,0.10210761124905149,599,0.0997586484312148,0.09573612228479485,248.72787610619469,295.92658889782786,179.52169540952286,172.96269294584945,4406.767945289612

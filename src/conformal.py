@@ -14,6 +14,14 @@ from torch.utils.data import DataLoader  # Import DataLoader
 import math
 import matplotlib.pyplot as plt
 
+def geom_cdf_stable(p, k):
+    """
+    Numerically stable CDF of Geometric(p) at k (support 1,2,3,...).
+    """
+    # computes 1 - (1-p)^k accuratly
+    cdf: np.ndarray = -np.expm1(k * np.log1p(-p))
+    return cdf.clip(0, 1)
+
 
 def get_probs(budget_per_sample, prior_quantile_est, needed_prob=1):
     C_probs = budget_per_sample / prior_quantile_est
@@ -161,7 +169,7 @@ def conformalize(
     budget_per_sample,
     share_budget=False,
     min_sample_size=None,
-    needed_prob=1,
+    naive: bool = False,
     toxicity_func=None,
     text_prep_func="sentence_completion",
     batch_size=1500,
@@ -186,7 +194,6 @@ def conformalize(
         budget_per_sample: The per-sample budget for the procedure.
         share_budget: Boolean flag for sharing budget.
         min_sample_size: Minimum sample size (if applicable).
-        needed_prob: The probability threshold required.
         toxicity_func: Function to determine toxicity.
         text_prep_func: Function to prepare text for rating.
         batch_size: Batch size for the generation process.
@@ -206,7 +213,10 @@ def conformalize(
 
     max_estimator = np.inf
 
-    if share_budget:
+    if naive:
+        p_C = 1 / budget_per_sample
+        C_probs = 1 - geom_cdf_stable(p=p_C, k=quantile_est)
+    elif share_budget:
         min_sample_size = min_sample_size if min_sample_size else 0
         max_estimator = min(max_estimator, int(budget_per_sample / min_sample_size) if min_sample_size else np.inf)
         quantile_est = np.minimum(quantile_est, max_estimator)
@@ -313,16 +323,16 @@ def conformalize(
 
     if return_extra:
         return (
-            tau_hat,
-            max_estimator,
-            q_hats,
-            T_tilde,
-            C,
-            quantile_est,
-            prior_quantile_est,
-            C_probs,
-            weights,
-            miscoverage,
+            tau_hat.item(), # float
+            max_estimator, # int
+            q_hats.flatten(), # np.ndarray; shape (n_samples,)
+            T_tilde.flatten(), # np.ndarray; shape (n_samples,)
+            C.flatten(), # np.ndarray; shape (n_samples,)
+            quantile_est, # np.ndarray; shape (n_samples, n_taus)
+            prior_quantile_est, # np.ndarray; shape (n_samples,)
+            C_probs, # np.ndarray; shape (n_samples,)
+            weights, # np.ndarray; shape (n_samples, n_taus)
+            miscoverage, # np.ndarray; shape (n_taus,)
         )
 
-    return tau_hat, max_estimator, q_hats
+    return tau_hat.item(), max_estimator, q_hats.flatten()

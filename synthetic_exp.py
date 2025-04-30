@@ -44,7 +44,7 @@ p = np.concatenate([p1, p2])
 input_size = 10
 taus = np.linspace(0.1, 0.9, input_size)
 # For each quantile level, compute the geometric quantile (raised to the 0.25 power) and stack as columns.
-x = np.stack([stats.geom.ppf(tau, p)**0.25 for tau in taus], axis=1)
+x = np.stack([stats.geom.ppf(tau, p) ** 0.25 for tau in taus], axis=1)
 x /= x.mean()
 x += np.random.normal(0, 0.1, x.shape)
 n_x, input_size = x.shape  # Update n_x if needed
@@ -70,38 +70,54 @@ print("Example of first 10 p values:", p[:10])
 print("Example of corresponding empirical probabilities (b/n):", (b[:10] / n_samples[:10]))
 
 # Split the data into training+calibration and test sets.
-# The original order of returned arrays is: 
-#   p_train, p_test, x_train, x_test, y_train, y_test, t_tilde_train, t_tilde_test, 
+# The original order of returned arrays is:
+#   p_train, p_test, x_train, x_test, y_train, y_test, t_tilde_train, t_tilde_test,
 #   e_train, e_test, b_train, b_test, n_samples_train, n_samples_test
 
-(p_train, p_test,
- x_train, x_test,
- y_train, y_test,
- t_tilde_train, t_tilde_test,
- e_train, e_test,
- b_train, b_test,
- n_samples_train, n_samples_test) = train_test_split(
-    p, x, y, t_tilde, e, b, n_samples, test_size=0.1, random_state=42)
+(
+    p_train,
+    p_test,
+    x_train,
+    x_test,
+    y_train,
+    y_test,
+    t_tilde_train,
+    t_tilde_test,
+    e_train,
+    e_test,
+    b_train,
+    b_test,
+    n_samples_train,
+    n_samples_test,
+) = train_test_split(p, x, y, t_tilde, e, b, n_samples, test_size=0.1, random_state=42)
 
 # Further split the training set into training and calibration subsets.
-# The returned order is: 
+# The returned order is:
 #   p_train, p_cal, x_train, x_cal, y_train, y_cal, t_tilde_train, t_tilde_cal,
 #   e_train, e_cal, b_train, b_cal, n_samples_train, n_samples_cal
-(p_train, p_cal,
- x_train, x_cal,
- y_train, y_cal,
- t_tilde_train, t_tilde_cal,
- e_train, e_cal,
- b_train, b_cal,
- n_samples_train, n_samples_cal) = train_test_split(
-    p_train, x_train, y_train, t_tilde_train, e_train, b_train, n_samples_train,
-    test_size=0.5, random_state=42)
+(
+    p_train,
+    p_cal,
+    x_train,
+    x_cal,
+    y_train,
+    y_cal,
+    t_tilde_train,
+    t_tilde_cal,
+    e_train,
+    e_cal,
+    b_train,
+    b_cal,
+    n_samples_train,
+    n_samples_cal,
+) = train_test_split(p_train, x_train, y_train, t_tilde_train, e_train, b_train, n_samples_train, test_size=0.5, random_state=42)
 
 # For use in later plots, sort p_test and adjust corresponding predictions accordingly.
 sort_idx = np.argsort(p_test)
 p_test = p_test[sort_idx]
 
 import numpy as np
+
 
 def geom_cdf_stable(k, p):
     """
@@ -113,7 +129,6 @@ def geom_cdf_stable(k, p):
     return -np.expm1(k * np.log1p(-p))
 
 
-
 # %%
 """
 Neural Network Model and Training Function Definitions
@@ -121,10 +136,12 @@ Neural Network Model and Training Function Definitions
 Define the model, loss functions, optimizer, dataset preparation, training loop, and prediction helper.
 """
 
+
 # --- Loss Functions ---
 def L1_loss(pred, target):
     """Compute L1 loss on sigmoid-transformed output."""
     return (torch.sigmoid(pred[:, 1]) - target).abs().mean()
+
 
 def L2_loss(pred, target):
     """Compute L2 loss on sigmoid-transformed output."""
@@ -146,7 +163,7 @@ class Model(nn.Module):
             if i < len(layer_dims) - 2:
                 layers.append(nn.ReLU())
         self.layers = nn.Sequential(*layers)
-    
+
     def forward(self, x):
         return self.layers(x)
 
@@ -163,7 +180,7 @@ def prepare_dataset(x_data, y_data, gt_p_data):
     Ensures that y_data and gt_p_data have the correct shape.
     """
     x_tensor = torch.tensor(x_data, dtype=torch.float32)
-    
+
     y_arr = np.array(y_data)
     if y_arr.ndim == 1:
         y_arr = y_arr.reshape(-1, 1)
@@ -172,45 +189,44 @@ def prepare_dataset(x_data, y_data, gt_p_data):
         if y_arr.shape[0] in [1, 2] and y_arr.shape[1] == len(x_data):
             y_arr = y_arr.T
     y_tensor = torch.tensor(y_arr, dtype=torch.float32)
-    
+
     p_arr = np.array(gt_p_data)
     if p_arr.ndim == 1:
         p_arr = p_arr.reshape(-1, 1)
     p_tensor = torch.tensor(p_arr, dtype=torch.float32)
-    
+
     return torch.utils.data.TensorDataset(x_tensor, y_tensor, p_tensor)
 
 
 # --- Training Function ---
-def train(loss_fn, model_params, optimizer_params, x_train, y_train, gt_p_train,
-          x_val=None, y_val=None, gt_p_val=None, n_epochs=100):
+def train(loss_fn, model_params, optimizer_params, x_train, y_train, gt_p_train, x_val=None, y_val=None, gt_p_val=None, n_epochs=100):
     """
     Train a model using the given loss function.
     """
     model = Model(**model_params)
     optimizer = get_optimizer(model, optimizer_params)
-    
+
     dataset_train = prepare_dataset(x_train, y_train, gt_p_train)
     dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=100, shuffle=True)
-    
+
     if x_val is not None:
         dataset_val = prepare_dataset(x_val, y_val, gt_p_val)
         dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=100, shuffle=False)
-    
+
     def validate():
         total_loss, total_gt_ce, total_L1 = 0.0, 0.0, 0.0
         for batch in dataloader_val:
             x_batch, y_batch, p_batch = batch
             out = model(x_batch)
             # Combine outputs into two channels.
-            loss = F.binary_cross_entropy_with_logits(out.reshape(-1), y_batch[:,0].reshape(-1))
+            loss = F.binary_cross_entropy_with_logits(out.reshape(-1), y_batch[:, 0].reshape(-1))
             gt_ce = torch.nn.functional.binary_cross_entropy_with_logits(out.reshape(-1), p_batch.reshape(-1))
             L1 = (torch.sigmoid(out.reshape(-1)) - p_batch.reshape(-1)).abs().mean()
             total_loss += loss.item()
             total_gt_ce += gt_ce.item()
             total_L1 += L1.item()
         n_batches = len(dataloader_val)
-        return total_loss/n_batches, total_gt_ce/n_batches, total_L1/n_batches
+        return total_loss / n_batches, total_gt_ce / n_batches, total_L1 / n_batches
 
     # Training loop
     for epoch in range(n_epochs):
@@ -218,8 +234,8 @@ def train(loss_fn, model_params, optimizer_params, x_train, y_train, gt_p_train,
         for batch in dataloader_train:
             x_batch, y_batch, p_batch = batch
             optimizer.zero_grad()
-            out = model(x_batch)            
-            loss = F.binary_cross_entropy_with_logits(out.reshape(-1), y_batch[:,0].reshape(-1))
+            out = model(x_batch)
+            loss = F.binary_cross_entropy_with_logits(out.reshape(-1), y_batch[:, 0].reshape(-1))
             with torch.no_grad():
                 gt_ce = torch.nn.functional.binary_cross_entropy_with_logits(out.reshape(-1), p_batch.reshape(-1))
                 L1 = (torch.sigmoid(out.reshape(-1)) - p_batch.reshape(-1)).abs().mean()
@@ -228,16 +244,20 @@ def train(loss_fn, model_params, optimizer_params, x_train, y_train, gt_p_train,
             total_loss += loss.item()
             total_gt_ce += gt_ce.item()
             total_L1 += L1.item()
-            
+
         if x_val is not None and epoch % 50 == 0:
             val_loss, val_gt_ce, val_L1 = validate()
-            print(f"Epoch {epoch} - Train Loss: {total_loss/len(dataloader_train):.4f} - "
-                  f"GT CE: {total_gt_ce/len(dataloader_train):.4f} - GT L1: {total_L1/len(dataloader_train):.4f} - "
-                  f"Val Loss: {val_loss:.4f} - Val GT CE: {val_gt_ce:.4f} - Val GT L1: {val_L1:.4f}")
+            print(
+                f"Epoch {epoch} - Train Loss: {total_loss/len(dataloader_train):.4f} - "
+                f"GT CE: {total_gt_ce/len(dataloader_train):.4f} - GT L1: {total_L1/len(dataloader_train):.4f} - "
+                f"Val Loss: {val_loss:.4f} - Val GT CE: {val_gt_ce:.4f} - Val GT L1: {val_L1:.4f}"
+            )
         elif x_val is None and epoch % 50 == 49:
-            print(f"Epoch {epoch} - Train Loss: {total_loss/len(dataloader_train):.4f} - "
-                  f"GT CE: {total_gt_ce/len(dataloader_train):.4f} - GT L1: {total_L1/len(dataloader_train):.4f}")
-            
+            print(
+                f"Epoch {epoch} - Train Loss: {total_loss/len(dataloader_train):.4f} - "
+                f"GT CE: {total_gt_ce/len(dataloader_train):.4f} - GT L1: {total_L1/len(dataloader_train):.4f}"
+            )
+
     return model
 
 
@@ -281,7 +301,7 @@ prop_model = train(
     x_val=x_test,
     y_val=y_test_prop,
     gt_p_val=p_test,
-    n_epochs=10
+    n_epochs=10,
 )
 
 # Obtain predictions on the test data.
@@ -308,8 +328,7 @@ plt.yscale("log")
 plt.xscale("log")
 empirical_pct_train = b_train / n_samples_train
 nonzero_train = empirical_pct_train > 0
-plt.scatter(p_train[nonzero_train], p_train[nonzero_train],
-            label="True p", c=empirical_pct_train[nonzero_train], cmap="viridis")
+plt.scatter(p_train[nonzero_train], p_train[nonzero_train], label="True p", c=empirical_pct_train[nonzero_train], cmap="viridis")
 plt.plot(p_test, prop_pred, label="Proportional model")
 plt.xlabel("True p")
 plt.ylabel("Predicted p")
@@ -326,13 +345,15 @@ Given model predictions and quantile levels taus, estimate the corresponding qua
 from a geometric distribution.
 """
 
+
 def quantile_estimators(preds, taus):
     """
-    For each tau value, return the corresponding quantile from a geometric distribution 
+    For each tau value, return the corresponding quantile from a geometric distribution
     with probability estimates given by preds.
     """
     preds = clip_p(preds.flatten())
     return np.array([stats.geom.ppf(q, preds) for q in taus])
+
 
 # Compute the 0.1 quantile for the proportional model predictions.
 q_prop = quantile_estimators(prop_pred, [0.1])[0]
@@ -355,6 +376,7 @@ Coverage and Utility Functions
 Define functions for computing coverage, redistributing sample budgets,
 resampling calibration sets, and solving an optimization problem.
 """
+
 
 def coverage(quantile_preds, p_vals):
     """Computes the coverage probability for given quantile predictions and true p-values."""
@@ -386,8 +408,7 @@ def resample_calibration_set(p_cal, prior_quantile_est, C_probs):
     - Each observation obtains C samples based on its probability.
     - For each, generate a geometric random variable and cap it at C.
     """
-    C = np.where(np.random.uniform(size=prior_quantile_est.shape) < C_probs,
-                 prior_quantile_est, 0).astype(int)
+    C = np.where(np.random.uniform(size=prior_quantile_est.shape) < C_probs, prior_quantile_est, 0).astype(int)
     T = np.random.geometric(p_cal, size=len(p_cal)).astype(int)
     T_tilde = np.minimum(T, C)
     return T_tilde, C
@@ -408,17 +429,18 @@ def solve_optimization(w, b_rhs, tol=1e-8):
     w = np.array(w, dtype=float)
     if b_rhs > np.sum(w):
         raise ValueError("The constraint b_rhs cannot exceed the sum of weights.")
-    
+
     lambda_low = 1e-12
     lambda_high = max(1 / w) * 10.0
     f_low = constraint_violation(lambda_low, w, b_rhs)
     f_high = constraint_violation(lambda_high, w, b_rhs)
-    
+
     while f_high > 0:
         lambda_high *= 2
         f_high = constraint_violation(lambda_high, w, b_rhs)
-    
+
     from scipy.optimize import bisect
+
     lambda_star = bisect(constraint_violation, lambda_low, lambda_high, args=(w, b_rhs), xtol=tol)
     p_opt = np.minimum(1, 1 / np.sqrt(lambda_star * w))
     return p_opt, lambda_star
@@ -435,11 +457,23 @@ Define a function that adjusts quantile estimates via conformalization.
 The function now requires the calibration probabilities (p_cal) to be passed explicitly.
 """
 
-def conformalize(preds, p_cal, target_taus, candidate_taus, C, T_tilde, budget_per_sample,
-                 share_budget=False, min_sample_size=None, needed_prob=1, naive=False):
+
+def conformalize(
+    preds,
+    p_cal,
+    target_taus,
+    candidate_taus,
+    C,
+    T_tilde,
+    budget_per_sample,
+    share_budget=False,
+    min_sample_size=None,
+    needed_prob=1,
+    naive=False,
+):
     """
     Adjust quantile estimates to achieve target coverage.
-    
+
     Parameters:
       preds            : Model predictions.
       p_cal            : Calibration set probabilities.
@@ -451,7 +485,7 @@ def conformalize(preds, p_cal, target_taus, candidate_taus, C, T_tilde, budget_p
       share_budget     : Whether the leftover budget should be shared.
       min_sample_size  : Minimum sample size if enforcing a floor.
       needed_prob      : Upper limit for allocated probability.
-    
+
     Returns:
       a tuple containing:
        - a_hats: Adjusted quantile estimates.
@@ -464,7 +498,7 @@ def conformalize(preds, p_cal, target_taus, candidate_taus, C, T_tilde, budget_p
     prior_tau = candidate_taus.max()
     quantile_est = quantile_estimators(preds, candidate_taus).astype(int)
     prior_quantile_est = quantile_estimators(preds, [prior_tau])[0].astype(int)
-    
+
     max_estimator = np.inf
     if share_budget:
         if min_sample_size:
@@ -483,27 +517,27 @@ def conformalize(preds, p_cal, target_taus, candidate_taus, C, T_tilde, budget_p
             C_probs = np.maximum(C_probs, min_sample_size)
             quantile_est = np.minimum(quantile_est, max_estimator)
             prior_quantile_est = np.minimum(prior_quantile_est, max_estimator)
-    
+
     if naive:
         # Use the naive approach. If C~Geom(p), both the indicator and probability of \hat{q} \leq C are the same as for \hat{q} \leq Ber(1-F(\hat{q})) * \hat{q}
         p_C = 1 / budget_per_sample
         C_probs = 1 - geom_cdf_stable(quantile_est, p=p_C)
-    
+
     # Resample calibration set using the computed probabilities.
     T_tilde_resampled, C_resampled = resample_calibration_set(p_cal, quantile_est if naive else prior_quantile_est, C_probs)
-    
+
     # Compute weights and miscoverage indicators.
-    weights = 1 / np.clip(C_probs, 1e-30, 1-1e-30)
+    weights = 1 / np.clip(C_probs, 1e-30, 1 - 1e-30)
     weights_adjusted = np.where(quantile_est <= C_resampled, weights, 0)
     T_tilde_miscoverage = np.where(T_tilde_resampled < quantile_est, 1, 0)
-    
+
     # Estimate miscoverage for each candidate quantile.
     tau_hats = (weights_adjusted * T_tilde_miscoverage).sum(axis=1) / weights_adjusted.sum(axis=1)
     tau_diff = target_taus - tau_hats[:, np.newaxis]
     smallest_pos = np.where(tau_diff > 0, 1, -1 * np.inf).cumsum(axis=0).argmax(axis=0)
     a_hats = candidate_taus[smallest_pos]
     mean_n_samples = np.random.geometric(p_C, size=p_cal.shape).mean() if naive else C_resampled.mean()
-    
+
     return a_hats, max_estimator, C_probs, mean_n_samples
 
 
@@ -524,12 +558,13 @@ prop_pred_cal = predict(prop_model, x_cal)
 budget_per_sample = 1000
 
 # Conformalize the predictions; pass p_cal explicitly.
-conformalized_prop, _, C_probs_prop, mean_n_samples_prop = \
-    conformalize(prop_pred_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample)
+conformalized_prop, _, C_probs_prop, mean_n_samples_prop = conformalize(
+    prop_pred_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample
+)
 
-conformalized_prop_min, max_est_surv, C_probs_prop_min, mean_n_samples_prop_min = \
-    conformalize(prop_pred_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal,
-                 budget_per_sample, min_sample_size=0.1, share_budget=True)
+conformalized_prop_min, max_est_surv, C_probs_prop_min, mean_n_samples_prop_min = conformalize(
+    prop_pred_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample, min_sample_size=0.1, share_budget=True
+)
 
 # Extract scalar quantiles.
 conformalized_prop = conformalized_prop[0]
@@ -543,17 +578,18 @@ q_prop_conf = quantile_estimators(prop_pred, [conformalized_prop])[0].astype(int
 q_prop_conf_min = np.minimum(quantile_estimators(prop_pred, [conformalized_prop_min])[0], max_est_surv).astype(int)
 
 # Conformalize using the naive method as well.
-conformalized_prop_naive, _, C_probs_prop_naive, _ = conformalize(prop_pred_cal, p_cal, target_taus, candidate_taus,
-                                                    n_samples_cal, t_tilde_cal, budget_per_sample,
-                                                    naive=True)
+conformalized_prop_naive, _, C_probs_prop_naive, _ = conformalize(
+    prop_pred_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample, naive=True
+)
 q_prop_conf_naive = quantile_estimators(prop_pred, [conformalized_prop_naive])[0].astype(int)
 
 # Ground truth quantiles using true test-set p.
 q_gt = stats.geom.ppf(0.1, p=p_test).astype(int)
 
 # Conformalize the ground truth probabilities as well.
-conformalized_gt, _, C_probs_gt, mean_n_samples_gt = conformalize(p_cal, p_cal, target_taus, candidate_taus,
-                                                               n_samples_cal, t_tilde_cal, budget_per_sample)
+conformalized_gt, _, C_probs_gt, mean_n_samples_gt = conformalize(
+    p_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample
+)
 q_gt_conf = quantile_estimators(p_test, conformalized_gt)[0].astype(int)
 
 # Plot the conformalized quantiles.
@@ -618,20 +654,51 @@ mean_coverages_prop_conf_min_shared = []
 mean_LPB_prop_conf_min_shared = []
 
 for _ in tqdm.tqdm(range(n_conformalizations)):
-    c_prop, _, _, mean_n_samples_prop = conformalize(prop_pred_cal, p_cal, target_taus, candidate_taus,
-                                      n_samples_cal, t_tilde_cal, budget_per_sample)
-    c_prop_naive, _, _, mean_n_samples_naive = conformalize(prop_pred_cal, p_cal, target_taus, candidate_taus,
-                                            n_samples_cal, t_tilde_cal, budget_per_sample, naive=True)
-    c_prop_min, max_est, _, mean_n_samples_min = conformalize(prop_pred_cal, p_cal, target_taus, candidate_taus,
-                                                 n_samples_cal, t_tilde_cal, budget_per_sample, min_sample_size=0.01)
-    c_prop_min_shared, max_est_shared, _, mean_n_samples_shared = conformalize(prop_pred_cal, p_cal, target_taus, candidate_taus,
-                                                              n_samples_cal, t_tilde_cal, budget_per_sample,
-                                                              min_sample_size=0.01, share_budget=True)
+    c_prop, _, _, mean_n_samples_prop = conformalize(
+        prop_pred_cal,
+        p_cal,
+        target_taus,
+        candidate_taus,
+        n_samples_cal,
+        t_tilde_cal,
+        budget_per_sample,
+    )
+    c_prop_naive, _, _, mean_n_samples_naive = conformalize(
+        prop_pred_cal,
+        p_cal,
+        target_taus,
+        candidate_taus,
+        n_samples_cal,
+        t_tilde_cal,
+        budget_per_sample,
+        naive=True,
+    )
+    c_prop_min, max_est, _, mean_n_samples_min = conformalize(
+        prop_pred_cal,
+        p_cal,
+        target_taus,
+        candidate_taus,
+        n_samples_cal,
+        t_tilde_cal,
+        budget_per_sample,
+        min_sample_size=0.01,
+    )
+    c_prop_min_shared, max_est_shared, _, mean_n_samples_shared = conformalize(
+        prop_pred_cal,
+        p_cal,
+        target_taus,
+        candidate_taus,
+        n_samples_cal,
+        t_tilde_cal,
+        budget_per_sample,
+        min_sample_size=0.01,
+        share_budget=True,
+    )
     q_prop_conf = quantile_estimators(prop_pred, [c_prop[0]])[0].astype(int)
     q_prop_conf_naive = quantile_estimators(prop_pred, [c_prop_naive[0]])[0].astype(int)
     q_prop_conf_min = np.minimum(quantile_estimators(prop_pred, [c_prop_min[0]])[0], max_est).astype(int)
     q_prop_conf_min_shared = np.minimum(quantile_estimators(prop_pred, [c_prop_min_shared[0]])[0], max_est_shared).astype(int)
-    
+
     mean_coverages_prop_conf.append(coverage(q_prop_conf, p_vals=p_test).mean())
     mean_LPB_prop_conf.append(q_prop_conf.mean())
     mean_coverages_prop_conf_naive.append(coverage(q_prop_conf_naive, p_vals=p_test).mean())
@@ -650,22 +717,13 @@ plt.violinplot(
         mean_coverages_prop_conf_naive,
         mean_coverages_prop_conf,
         mean_coverages_prop_conf_min,
-        mean_coverages_prop_conf_min_shared
+        mean_coverages_prop_conf_min_shared,
     ],
-    showmeans=True
+    showmeans=True,
 )
 
 # Rotate x-axis labels and align them nicely.
-plt.xticks(
-    [1, 2, 3, 4, 5],
-    [
-        "Uncalibrated", 
-        "Naive\nBudgeting",
-        "Adaptive\nBudgeting", 
-        "Capped Adaptive\nBudgeting", 
-        "Global\nBudgeting"
-    ]
-)
+plt.xticks([1, 2, 3, 4, 5], ["Uncalibrated", "Naive\nBudgeting", "Adaptive\nBudgeting", "Capped Adaptive\nBudgeting", "Global\nBudgeting"])
 
 plt.ylabel("Mean coverage")
 plt.tight_layout()
@@ -686,22 +744,10 @@ Visualize the distribution of quantile predictions (LPB) using violin plots.
 """
 
 plt.figure()
-plt.violinplot([mean_LPB_prop,
-                mean_LPB_prop_conf_naive,
-                mean_LPB_prop_conf,
-                mean_LPB_prop_conf_min, mean_LPB_prop_conf_min_shared])
+plt.violinplot([mean_LPB_prop, mean_LPB_prop_conf_naive, mean_LPB_prop_conf, mean_LPB_prop_conf_min, mean_LPB_prop_conf_min_shared])
 
 # Rotate x-axis labels and align them nicely.
-plt.xticks(
-    [1, 2, 3, 4, 5],
-    [
-        "Uncalibrated", 
-        "Naive\nBudgeting",
-        "Adaptive\nBudgeting", 
-        "Capped Adaptive\nBudgeting", 
-        "Global\nBudgeting"
-    ]
-)
+plt.xticks([1, 2, 3, 4, 5], ["Uncalibrated", "Naive\nBudgeting", "Adaptive\nBudgeting", "Capped Adaptive\nBudgeting", "Global\nBudgeting"])
 plt.ylabel("Mean LPB")
 plt.yscale("log")
 plt.show()
@@ -738,8 +784,18 @@ import pandas as pd
 import tqdm
 import seaborn as sns
 
-def vary_budget_per_sample(budgets, p_cal, prop_pred_cal, n_samples_cal, t_tilde_cal,
-                           n_conformalizations=20, min_sample_size=0, share_budget=False, naive=False):
+
+def vary_budget_per_sample(
+    budgets,
+    p_cal,
+    prop_pred_cal,
+    n_samples_cal,
+    t_tilde_cal,
+    n_conformalizations=20,
+    min_sample_size=0,
+    share_budget=False,
+    naive=False,
+):
     """
     Vary the budget_per_sample and compute mean coverage and LPB for each budget.
 
@@ -762,35 +818,42 @@ def vary_budget_per_sample(budgets, p_cal, prop_pred_cal, n_samples_cal, t_tilde
     coverage_df = pd.DataFrame(index=budgets, columns=range(n_conformalizations))
     LPB_df = pd.DataFrame(index=budgets, columns=range(n_conformalizations))
     mean_samples_df = pd.DataFrame(index=budgets, columns=range(n_conformalizations))
-    
+
     # Loop over each budget value.
     for budget in budgets:
         for i in tqdm.tqdm(range(n_conformalizations), desc=f"Processing budget {budget}"):
             # Run the conformalization function, passing the additional parameters.
             c_prop, max_est, _, mean_n_samples = conformalize(
-                prop_pred_cal, p_cal, target_taus, candidate_taus,
-                n_samples_cal, t_tilde_cal, budget,
-                min_sample_size=min_sample_size, share_budget=share_budget,
-                naive=naive
+                prop_pred_cal,
+                p_cal,
+                target_taus,
+                candidate_taus,
+                n_samples_cal,
+                t_tilde_cal,
+                budget,
+                min_sample_size=min_sample_size,
+                share_budget=share_budget,
+                naive=naive,
             )
-            
+
             max_est = np.inf if max_est is None else max_est
-            
+
             # Obtain the quantile estimator output.
             q_prop_conf = quantile_estimators(prop_pred, [c_prop[0]])[0].astype(int)
             q_prop_conf = np.minimum(q_prop_conf, max_est).astype(int)
-            
+
             # Compute the mean coverage (using your coverage function and test set values).
             cov = coverage(q_prop_conf, p_vals=p_test).mean()
             # Compute the mean LPB as the mean value of the quantile estimator.
             lpb = q_prop_conf.mean()
-            
+
             # Store the values in the DataFrames.
             coverage_df.loc[budget, i] = cov
             LPB_df.loc[budget, i] = lpb
             mean_samples_df.loc[budget, i] = mean_n_samples
-    
+
     return coverage_df, LPB_df, mean_samples_df
+
 
 # Define a range of budgets to test.
 budgets = np.linspace(10, 10000, 10)
@@ -803,7 +866,7 @@ experiments = [
     ("Fixed Budgeting", 0, False, True),
     ("Adaptive Budgeting", 0, False, False),
     ("Capped Adaptive Budgeting", 0.01, False, False),
-    ("Global Budgeting", 0.01, True, False)
+    ("Global Budgeting", 0.01, True, False),
 ]
 
 # Run the experiments.
@@ -811,9 +874,15 @@ for label, min_sample_size, share_budget, naive in experiments:
     print(f"Running experiment: {label}")
     print(label, min_sample_size, share_budget, naive)
     cov_df, lpb_df, mean_samples_df = vary_budget_per_sample(
-        budgets, p_cal, prop_pred_cal, n_samples_cal, t_tilde_cal,
-        n_conformalizations=20, min_sample_size=min_sample_size, share_budget=share_budget,
-        naive=naive
+        budgets,
+        p_cal,
+        prop_pred_cal,
+        n_samples_cal,
+        t_tilde_cal,
+        n_conformalizations=20,
+        min_sample_size=min_sample_size,
+        share_budget=share_budget,
+        naive=naive,
     )
     results[label] = (cov_df, lpb_df, mean_samples_df)
 
@@ -824,27 +893,27 @@ coverage_list = []
 for label, (cov_df, _, _) in results.items():
     # Reset index to turn the budget values into a column,
     # then melt the iteration columns into a long format.
-    cov_long = cov_df.reset_index().rename(columns={'index': 'Budget'})
-    cov_melt = cov_long.melt(id_vars='Budget', var_name='Iteration', value_name='Coverage')
-    cov_melt['Experiment'] = label
+    cov_long = cov_df.reset_index().rename(columns={"index": "Budget"})
+    cov_melt = cov_long.melt(id_vars="Budget", var_name="Iteration", value_name="Coverage")
+    cov_melt["Experiment"] = label
     coverage_list.append(cov_melt)
 coverage_all = pd.concat(coverage_list, ignore_index=True)
 
 # For LPB: Convert each DataFrame from wide to long format.
 lpb_list = []
 for label, (_, lpb_df, _) in results.items():
-    lpb_long = lpb_df.reset_index().rename(columns={'index': 'Budget'})
-    lpb_melt = lpb_long.melt(id_vars='Budget', var_name='Iteration', value_name='LPB')
-    lpb_melt['Experiment'] = label
+    lpb_long = lpb_df.reset_index().rename(columns={"index": "Budget"})
+    lpb_melt = lpb_long.melt(id_vars="Budget", var_name="Iteration", value_name="LPB")
+    lpb_melt["Experiment"] = label
     lpb_list.append(lpb_melt)
 lpb_all = pd.concat(lpb_list, ignore_index=True)
 
 # For Mean Samples: Convert each DataFrame from wide to long format.
 mean_samples_list = []
 for label, (_, _, mean_samples_df) in results.items():
-    mean_samples_long = mean_samples_df.reset_index().rename(columns={'index': 'Budget'})
-    mean_samples_melt = mean_samples_long.melt(id_vars='Budget', var_name='Iteration', value_name='Mean Samples')
-    mean_samples_melt['Experiment'] = label
+    mean_samples_long = mean_samples_df.reset_index().rename(columns={"index": "Budget"})
+    mean_samples_melt = mean_samples_long.melt(id_vars="Budget", var_name="Iteration", value_name="Mean Samples")
+    mean_samples_melt["Experiment"] = label
     mean_samples_list.append(mean_samples_melt)
 mean_samples_all = pd.concat(mean_samples_list, ignore_index=True)
 
@@ -854,9 +923,7 @@ mean_samples_all = pd.concat(mean_samples_list, ignore_index=True)
 # --- Plotting with Seaborn ---
 
 sns.set(
-    style="whitegrid",
-    context="notebook",    # other options: paper, talk, poster
-    font_scale=2.5         # adjust this multiplier to scale fonts
+    style="whitegrid", context="notebook", font_scale=2.5  # other options: paper, talk, poster  # adjust this multiplier to scale fonts
 )
 
 # Set the seaborn style.
@@ -866,15 +933,11 @@ plt.figure(figsize=(30, 10))
 
 # Coverage plot.
 plt.subplot(1, 3, 1)
-sns.lineplot(
-    data=coverage_all, x='Budget', y='Coverage', hue='Experiment',
-    marker="o", errorbar='sd'
-)
+sns.lineplot(data=coverage_all, x="Budget", y="Coverage", hue="Experiment", marker="o", errorbar="sd")
 # Plot the 90% coverage line.
 plt.hlines(0.9, budgets.min(), budgets.max(), label="90% coverage", color="gray", linestyle="--")
 # Plot the uncalibrated coverage line.
-plt.hlines(coverage(q_prop, p_vals=p_test).mean(), budgets.min(), budgets.max(), 
-           label="Uncalibrated", color="black")
+plt.hlines(coverage(q_prop, p_vals=p_test).mean(), budgets.min(), budgets.max(), label="Uncalibrated", color="black")
 plt.title("Coverage vs Budget")
 plt.xlabel("Budget per Sample")
 plt.xlim(0, budgets.max())
@@ -885,24 +948,18 @@ plt.legend().remove()
 # LPB plot, log scale.
 plt.subplot(1, 3, 3)
 plt.yscale("log")
-sns.lineplot(
-    data=lpb_all, x='Budget', y='LPB', hue='Experiment',
-    marker="o", errorbar='sd'
-)
+sns.lineplot(data=lpb_all, x="Budget", y="LPB", hue="Experiment", marker="o", errorbar="sd")
 # Plot the uncalibrated prediction line.
 plt.hlines(q_prop.mean(), budgets.min(), budgets.max(), label="Uncalibrated", color="black", linestyle="--")
 plt.title("LPB vs Budget")
 plt.xlabel("Budget per Sample")
 plt.xlim(0, budgets.max())
 plt.ylabel("Mean LPB")
-plt.legend(loc='lower right', fontsize=26)
+plt.legend(loc="lower right", fontsize=26)
 
 # Mean samples plot.
 plt.subplot(1, 3, 2)
-sns.lineplot(
-    data=mean_samples_all, x='Budget', y='Mean Samples', hue='Experiment',
-    marker="o", errorbar='sd'
-)
+sns.lineplot(data=mean_samples_all, x="Budget", y="Mean Samples", hue="Experiment", marker="o", errorbar="sd")
 plt.title("Mean Samples vs Budget")
 plt.xlabel("Budget per Sample")
 plt.xlim(0, budgets.max())
@@ -913,10 +970,20 @@ plt.tight_layout()
 plt.gcf().set_dpi(300)
 plt.legend().remove()
 plt.show()
+
+
 # %%
-#Now do the same axperiment but varying the minimum sample size
-def vary_min_sample_size(min_sample_sizes, p_cal, prop_pred_cal, n_samples_cal, t_tilde_cal,
-                          n_conformalizations=20, budget_per_sample=1000, share_budget=False):
+# Now do the same axperiment but varying the minimum sample size
+def vary_min_sample_size(
+    min_sample_sizes,
+    p_cal,
+    prop_pred_cal,
+    n_samples_cal,
+    t_tilde_cal,
+    n_conformalizations=20,
+    budget_per_sample=1000,
+    share_budget=False,
+):
     """
     Vary the min_sample_size and compute mean coverage and LPB for each sample size.
 
@@ -938,23 +1005,29 @@ def vary_min_sample_size(min_sample_sizes, p_cal, prop_pred_cal, n_samples_cal, 
     # Initialize DataFrames with min_sample_sizes as index and conformalization iteration indices as columns.
     coverage_df = pd.DataFrame(index=min_sample_sizes, columns=range(n_conformalizations))
     LPB_df = pd.DataFrame(index=min_sample_sizes, columns=range(n_conformalizations))
-    
+
     # Loop over each min_sample_size value.
     for min_sample_size in min_sample_sizes:
         for i in tqdm.tqdm(range(n_conformalizations), desc=f"Processing min sample size {min_sample_size}"):
             # Run the conformalization function, passing the additional parameters.
             c_prop, max_est, _, mean_n_samples = conformalize(
-                prop_pred_cal, p_cal, target_taus, candidate_taus,
-                n_samples_cal, t_tilde_cal, budget_per_sample,
-                min_sample_size=min_sample_size, share_budget=share_budget
+                prop_pred_cal,
+                p_cal,
+                target_taus,
+                candidate_taus,
+                n_samples_cal,
+                t_tilde_cal,
+                budget_per_sample,
+                min_sample_size=min_sample_size,
+                share_budget=share_budget,
             )
-            
+
             max_est = np.inf if max_est is None else max_est
-            
+
             # Obtain the quantile estimator output.
             q_prop_conf = quantile_estimators(prop_pred, [c_prop[0]])[0].astype(int)
             q_prop_conf = np.minimum(q_prop_conf, max_est).astype(int)
-            
+
             # Compute the mean
             cov = coverage(q_prop_conf, p_vals=p_test).mean()
             # Compute the mean LPB as the mean value of the quantile estimator.
@@ -963,6 +1036,8 @@ def vary_min_sample_size(min_sample_sizes, p_cal, prop_pred_cal, n_samples_cal, 
             coverage_df.loc[min_sample_size, i] = cov
             LPB_df.loc[min_sample_size, i] = lpb
     return coverage_df, LPB_df
+
+
 # Define a range of min_sample_sizes to test.
 min_sample_sizes = np.linspace(1e-4, 0.1, 10)
 # Dictionary to store results for each experimental condition.
@@ -976,8 +1051,14 @@ experiments_min_sample = [
 for label, n_samples_cal, share_budget in experiments_min_sample:
     print(f"Running experiment: {label}")
     cov_df, lpb_df = vary_min_sample_size(
-        min_sample_sizes, p_cal, prop_pred_cal, n_samples_cal, t_tilde_cal,
-        n_conformalizations=20, budget_per_sample=1000, share_budget=share_budget
+        min_sample_sizes,
+        p_cal,
+        prop_pred_cal,
+        n_samples_cal,
+        t_tilde_cal,
+        n_conformalizations=20,
+        budget_per_sample=1000,
+        share_budget=share_budget,
     )
     results_min_sample[label] = (cov_df, lpb_df)
 # --- Prepare Data for Seaborn ---
@@ -986,37 +1067,32 @@ coverage_list_min_sample = []
 for label, (cov_df, _) in results_min_sample.items():
     # Reset index to turn the min_sample_sizes into a column,
     # then melt the iteration columns into a long format.
-    cov_long = cov_df.reset_index().rename(columns={'index': 'Min Sample Size'})
-    cov_melt = cov_long.melt(id_vars='Min Sample Size', var_name='Iteration', value_name='Coverage')
-    cov_melt['Experiment'] = label
+    cov_long = cov_df.reset_index().rename(columns={"index": "Min Sample Size"})
+    cov_melt = cov_long.melt(id_vars="Min Sample Size", var_name="Iteration", value_name="Coverage")
+    cov_melt["Experiment"] = label
     coverage_list_min_sample.append(cov_melt)
 coverage_all_min_sample = pd.concat(coverage_list_min_sample, ignore_index=True)
 
 # For LPB: Convert each DataFrame from wide to long format.
 lpb_list_min_sample = []
 for label, (_, lpb_df) in results_min_sample.items():
-    lpb_long = lpb_df.reset_index().rename(columns={'index': 'Min Sample Size'})
-    lpb_melt = lpb_long.melt(id_vars='Min Sample Size', var_name='Iteration', value_name='LPB')
-    lpb_melt['Experiment'] = label
+    lpb_long = lpb_df.reset_index().rename(columns={"index": "Min Sample Size"})
+    lpb_melt = lpb_long.melt(id_vars="Min Sample Size", var_name="Iteration", value_name="LPB")
+    lpb_melt["Experiment"] = label
     lpb_list_min_sample.append(lpb_melt)
 lpb_all_min_sample = pd.concat(lpb_list_min_sample, ignore_index=True)
 # %%
 # --- Plotting with Seaborn ---
 # Set the seaborn style.
 sns.set(
-    style="whitegrid",
-    context="notebook",    # other options: paper, talk, poster
-    font_scale=1.5         # adjust this multiplier to scale fonts
+    style="whitegrid", context="notebook", font_scale=1.5  # other options: paper, talk, poster  # adjust this multiplier to scale fonts
 )
 # Set the resolution of the plot.
 plt.gcf().set_dpi(300)
 plt.figure(figsize=(14, 6))
 # Coverage plot.
 plt.subplot(1, 2, 1)
-sns.lineplot(
-    data=coverage_all_min_sample, x='Min Sample Size', y='Coverage', hue='Experiment',
-    marker="o", errorbar='sd'
-)
+sns.lineplot(data=coverage_all_min_sample, x="Min Sample Size", y="Coverage", hue="Experiment", marker="o", errorbar="sd")
 # Write the title in Latex, Coverage vs \pi_{\text{min}}
 plt.title(r"Coverage vs $\pi_{\text{min}}$")
 plt.xlabel(r"$\pi_{\text{min}}$")
@@ -1027,15 +1103,12 @@ plt.legend().remove()
 plt.hlines(0.9, 0, 0.1, label="90% coverage", color="gray", linestyle="--")
 plt.subplot(1, 2, 2)
 plt.yscale("log")
-sns.lineplot(
-    data=lpb_all_min_sample, x='Min Sample Size', y='LPB', hue='Experiment',
-    marker="o", errorbar='sd'
-)
+sns.lineplot(data=lpb_all_min_sample, x="Min Sample Size", y="LPB", hue="Experiment", marker="o", errorbar="sd")
 plt.title(r"LPB vs $\pi_{\text{min}}$")
 plt.xlabel(r"$\pi_{\text{min}}$")
 plt.xlim(0, 0.1)
 plt.ylabel("Mean LPB")
-plt.legend(loc='upper right')
+plt.legend(loc="upper right")
 plt.tight_layout()
 plt.show()
-# %%    
+# %%
