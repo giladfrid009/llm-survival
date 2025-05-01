@@ -489,7 +489,7 @@ def generate_survival_results_generic(
         else [None] * n_gpus
     )
 
-    ctx = get_context("spawn") # NEW
+    ctx = get_context("spawn")
     with concurrent.futures.ProcessPoolExecutor(max_workers=n_gpus, mp_context=ctx) as executor:
         futures = [
             executor.submit(

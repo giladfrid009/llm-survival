@@ -81,6 +81,7 @@ def sample_calibration_set(
     # Note: We set max_attempts high (here int(10e6)) and pass C as per–prompt attempt limits.
     survival_results = generate_survival_results_generic(
         prompts=X,
+        prompt_ids=list(range(C.size)),
         prompt_attempts=C,
         generate_params={"batch_size": batch_size},
         generator_params=generator_params,
@@ -91,7 +92,7 @@ def sample_calibration_set(
         conserve_memory=True,
         multi_gpu=multi_gpu,
     )
-
+    
     T_tilde = np.array([r.num_attempts for r in survival_results]).reshape(-1, 1)
     ids = np.array([r.id for r in survival_results])
 

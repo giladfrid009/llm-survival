@@ -3,8 +3,7 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader  # Import DataLoader
 from src.failure_model import ToxicClassifier
-from src.datasets import PromptOnlyDataset, PropDataset
-import torch._dynamo
+from src.datasets import PromptOnlyDataset
 import pandas as pd
 from src.conformal import conformalize
 import time
@@ -12,7 +11,19 @@ from src import utils
 import pandas as pd
 import os
 import sys
+from huggingface_hub.hf_api import HfFolder
 
+
+#############################################################################################################
+# EXPERIMENT PARAMETERS
+#############################################################################################################
+
+
+# Get the Hugging Face key and save it
+HF_KEY = utils.api_key_from_file("HF_KEY.txt")
+HfFolder.save_token(HF_KEY)
+
+# experiment parameters
 
 DS_CAL_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
 DS_TEST_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl"
@@ -24,9 +35,6 @@ RATER_PARAMS = {
     "amp": True,
 }
 
-# Get the Hugging Face key.
-HF_KEY = utils.api_key_from_file("HF_KEY.txt")
-
 # Create the parameter dictionary for the generation backend.
 GENERATOR_PARAMS = {
     "model_name": "meta-llama/Llama-3.2-1B",
@@ -36,16 +44,15 @@ GENERATOR_PARAMS = {
     "torch_dtype": torch.bfloat16,
 }
 
-
 TARGET_TAUS = torch.tensor([0.1])
 TAUS_RANGE = torch.tensor(np.logspace(-8, -0.33, 500))
 target_tau_idx = torch.argmin(torch.abs(TAUS_RANGE - TARGET_TAUS))
 
 # name, min_sample_size, share_budget, naive
 EXPERIMENTS = [
-    ("Fixed Budgeting", None, False, True),
+    # ("Fixed Budgeting", None, False, True),
     # ("Adaptive Budgeting", None, False, False),
-    # ("Capped Adaptive Budgeting", 0.5, False, False),
+    ("Capped Adaptive Budgeting", 0.5, False, False),
     # ("Global Budgeting", 0.5, True, False),
 ]
 
@@ -53,9 +60,14 @@ EXPERIMENTS = [
 # BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
 
 NUM_RUNS = 1
-BUDGET_RANGE = [10]
+BUDGET_RANGE = [10, 30]
 
 SAVE_PATH = "results.csv"
+
+
+#############################################################################################################
+# UTILITY FUNCTIONS
+#############################################################################################################
 
 
 def validate_save_path(save_path):
@@ -78,7 +90,7 @@ def validate_save_path(save_path):
             print("Exiting without overwriting.")
             sys.exit(1)
         else:
-            print("Continuing.")
+            print(f"Continuing, overwriting file '{save_path}'.")
 
 
 def save_results(save_path, df):
@@ -116,6 +128,11 @@ def print_result(result_dict):
     print("-" * 60)
 
 
+#############################################################################################################
+# MAIN FUNCTION
+#############################################################################################################
+
+
 def run_experiments():
     print_config()
     validate_save_path(SAVE_PATH)
@@ -134,29 +151,17 @@ def run_experiments():
     model.set_taus(TAUS_RANGE)
     model.set_min_p_for_q_tau(1e-20)
 
-    # run experiments
-    results_df = pd.DataFrame(
-        columns=[
-            "experiment",
-            "budget",
-            "run_num",
-            "tau_hat",
-            "max_est",
-            "calib_tau_hat_miscoverage",
-            "calib_tau_target_miscoverage",
-            "calib_mean_generated_samples",
-            "calib_mean_c_value",
-            "test_tau_hat_lpb",
-            "test_tau_target_lpb",
-            "time_delta",
-        ]
-    )
+    # run
+
+    # NOTE: dont enable multiple-gpus for inference, as it causes weird bugs
+    trainer = pl.Trainer(enable_progress_bar=False, accelerator="gpu", devices=1)
+    
+    results_df = pd.DataFrame()
 
     for run_num in range(NUM_RUNS):
 
         for exp_type in EXPERIMENTS:
 
-            trainer = pl.Trainer(enable_progress_bar=False)
             name, min_sample_size, share_budget, naive = exp_type
 
             for budget in BUDGET_RANGE:
@@ -218,7 +223,10 @@ def run_experiments():
 
                 # add results to dataframe
                 result_dict = {
-                    "experiment": name,
+                    "exp_name": name,
+                    "exp_min_sample_size": min_sample_size,
+                    "exp_share_budget": share_budget,
+                    "exp_naive": naive,
                     "budget": budget,
                     "run_num": run_num,
                     "tau_hat": tau_hat,
@@ -240,8 +248,14 @@ def run_experiments():
 
 
 def main():
-    torch._dynamo.config.suppress_errors = True
+
+    # NOTE: open a new terminal session after running this if you encounter HF token issues
+    # in any of the workers or the main process
+    HfFolder.save_token(HF_KEY)
+
+    # NOTE: to stop pytorch breaking
     torch.multiprocessing.set_start_method("spawn", force=True)
+
     run_experiments()
 
 
