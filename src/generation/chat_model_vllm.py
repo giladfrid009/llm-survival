@@ -22,7 +22,7 @@ class ChatGeneratorVLLM(GenerationBackend):
         if sampling_args is None:
             sampling_args = {}
 
-        login(hf_token, new_session=False)
+        # login(hf_token, new_session=False)
 
         overhead_tokens = 100
         tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
