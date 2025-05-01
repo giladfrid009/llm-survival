@@ -56,11 +56,8 @@ EXPERIMENTS = [
     # ("Global Budgeting", 0.5, True, False),
 ]
 
-# NUM_RUNS = 5
-# BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
-
-NUM_RUNS = 1
-BUDGET_RANGE = [10, 30]
+NUM_RUNS = 5
+BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
 
 SAVE_PATH = "results.csv"
 
@@ -74,23 +71,27 @@ def validate_save_path(save_path):
     # make save_path absolute if it is not
     if not os.path.isabs(save_path):
         save_path = os.path.abspath(save_path)
-    # Check if the directory exists
+    # Ensure directory exists
     directory = os.path.dirname(save_path)
     if not os.path.exists(directory):
-        # Create the directory if it doesn't exist
         print(f"Results directory {directory} does not exist. Creating it.")
         os.makedirs(directory)
         print(f"Directory {directory} created.")
 
-    # Check if the file already exists
+    # If the file already exists, ask what to do
     if os.path.exists(save_path):
-        # Ask the user if they want to overwrite
-        overwrite = input(f"Warning: file '{save_path}' already exists. Do you want to overwrite it? (y/n): ")
-        if overwrite.lower() != "y":
-            print("Exiting without overwriting.")
-            sys.exit(1)
+        choice = input(f"Warning: results file '{save_path}' already exists.\n" "continue from last experiment (c), overwrite file (o), or exit (e)? [c/o/e]: ")
+        choice = choice.strip().lower()
+        if choice == "o":
+            print(f"Overwriting '{save_path}'.")
+            return None  # signal to start with empty DataFrame
+        elif choice == "c":
+            return load_results(save_path)
         else:
-            print(f"Continuing, overwriting file '{save_path}'.")
+            print("Exiting without changes.")
+            sys.exit(1)
+
+    return None
 
 
 def save_results(save_path, df):
@@ -134,8 +135,12 @@ def print_result(result_dict):
 
 
 def run_experiments():
+
     print_config()
-    validate_save_path(SAVE_PATH)
+
+    results_df = validate_save_path(SAVE_PATH)
+    if results_df is None:
+        results_df = pd.DataFrame()
 
     # load data
     ds_cal = PromptOnlyDataset(DS_CAL_PATH)
@@ -151,12 +156,8 @@ def run_experiments():
     model.set_taus(TAUS_RANGE)
     model.set_min_p_for_q_tau(1e-20)
 
-    # run
-
     # NOTE: dont enable multiple-gpus for inference, as it causes weird bugs
     trainer = pl.Trainer(enable_progress_bar=False, accelerator="gpu", devices=1)
-    
-    results_df = pd.DataFrame()
 
     for run_num in range(NUM_RUNS):
 
@@ -169,6 +170,21 @@ def run_experiments():
                 print("-" * 60)
                 print(f"Running {name} with budget {budget} (run {run_num + 1}/{NUM_RUNS})")
                 print("-" * 60)
+
+                # check if experiment already exists
+                if (
+                    not results_df.empty
+                    and (
+                        (results_df["exp_run_num"] == run_num)
+                        & (results_df["exp_name"] == name)
+                        & (results_df["exp_min_sample_size"] == min_sample_size)
+                        & (results_df["exp_share_budget"] == share_budget)
+                        & (results_df["exp_naive"] == naive)
+                        & (results_df["exp_budget"] == budget)
+                    ).any()
+                ):
+                    print(f"Skipping {name} with budget {budget} (run {run_num + 1}/{NUM_RUNS}) - already done.")
+                    continue
 
                 start_time = time.time()
 
@@ -186,7 +202,7 @@ def run_experiments():
                     min_sample_size=min_sample_size,
                     naive=naive,
                     text_prep_func="sentence_completion",
-                    multi_gpu=True,
+                    multi_gpu=torch.cuda.device_count() > 1,
                     plot=False,
                     return_extra=True,
                     batch_size=1500,
@@ -227,8 +243,8 @@ def run_experiments():
                     "exp_min_sample_size": min_sample_size,
                     "exp_share_budget": share_budget,
                     "exp_naive": naive,
-                    "budget": budget,
-                    "run_num": run_num,
+                    "exp_budget": budget,
+                    "exp_run_num": run_num,
                     "tau_hat": tau_hat,
                     "max_est": max_est,
                     "calib_tau_hat_miscoverage": tau_hat_miscoverage,
