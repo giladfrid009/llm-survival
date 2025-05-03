@@ -1,2 +1,0 @@
-exp_name,exp_min_sample_size,exp_share_budget,exp_naive,exp_budget,exp_run_num,tau_hat,max_est,cal_hours,cal_mean_generated_samples,cal_mean_c_value,cal_miscoverage,test_miscoverage,test_mean_lpb,test_hours
-Global Budgeting,0.5,True,False,1,0,0.4677351412871982,2,0.086,0.982250603378922,0.9942176186645213,0.023313313898774717,0.02071496807280406,1.9123133390316256,0.08

@@ -65,10 +65,10 @@ EXPERIMENTS = [
 ]
 
 NUM_RUNS = 5
-# BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
+BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
 
-NUM_RUNS = 2
-BUDGET_RANGE = [1, 2]
+# NUM_RUNS = 2
+# BUDGET_RANGE = [1, 2]
 
 SAVE_PATH = "results_v2.csv"
 
