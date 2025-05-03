@@ -2,6 +2,7 @@ from vllm import LLM, SamplingParams
 from src.generation.base import *
 from huggingface_hub import login
 from transformers import AutoTokenizer
+from logging import getLogger
 
 
 class VanillaGeneratorVLLM(GenerationBackend):
@@ -29,9 +30,10 @@ class VanillaGeneratorVLLM(GenerationBackend):
         empty_input_tokens = len(tokenizer("")["input_ids"])
         total_tokens = max_input_tokens + max_output_tokens + empty_input_tokens
 
-        print("INFO: Overhead tokens: ", overhead_tokens)
-        print("INFO: Empty input tokens: ", empty_input_tokens)
-        print("INFO: Total sequence tokens: ", total_tokens)
+        logger = getLogger(__name__)
+        logger.info("Overhead tokens: %d", overhead_tokens)
+        logger.info("Empty input tokens: %d", empty_input_tokens)
+        logger.info("Total sequence tokens: %d", total_tokens)
 
         self.llm = LLM(
             model=model_name,

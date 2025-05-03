@@ -1,17 +1,20 @@
 import pytorch_lightning as pl
+from huggingface_hub.hf_api import HfFolder
 import torch
 import numpy as np
-from torch.utils.data import DataLoader  # Import DataLoader
+from torch.utils.data import DataLoader
+import pandas as pd
+
 from src.failure_model import ToxicClassifier
 from src.datasets import PromptOnlyDataset
-import pandas as pd
+from src.survival_runner import generate_survival_results_generic
 from src.conformal import conformalize
-import time
 from src import utils
-import pandas as pd
+
+import time
 import os
 import sys
-from huggingface_hub.hf_api import HfFolder
+import logging
 
 
 #############################################################################################################
@@ -21,7 +24,6 @@ from huggingface_hub.hf_api import HfFolder
 
 # Get the Hugging Face key and save it
 HF_KEY = utils.api_key_from_file("HF_KEY.txt")
-HfFolder.save_token(HF_KEY)
 
 # experiment parameters
 
@@ -45,21 +47,30 @@ GENERATOR_PARAMS = {
 }
 
 TARGET_TAUS = torch.tensor([0.1])
-TAUS_RANGE = torch.tensor(np.logspace(-8, -0.33, 500))
-target_tau_idx = torch.argmin(torch.abs(TAUS_RANGE - TARGET_TAUS))
+MIN_TAU_EXP = -8
+MAX_TAU_EXP = -0.33
+NUM_TAUS = 500
+TAUS_RANGE = torch.tensor(np.logspace(MIN_TAU_EXP, MAX_TAU_EXP, NUM_TAUS))
+
+TOXICITY_FUNC = None
+TEXT_PREP_FUNC = "sentence_completion"
+BATCH_SIZE = 1500
 
 # name, min_sample_size, share_budget, naive
 EXPERIMENTS = [
     # ("Fixed Budgeting", None, False, True),
     # ("Adaptive Budgeting", None, False, False),
-    ("Capped Adaptive Budgeting", 0.5, False, False),
-    # ("Global Budgeting", 0.5, True, False),
+    # ("Capped Adaptive Budgeting", 0.5, False, False),
+    ("Global Budgeting", 0.5, True, False),
 ]
 
 NUM_RUNS = 5
-BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
+# BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
 
-SAVE_PATH = "results.csv"
+NUM_RUNS = 2
+BUDGET_RANGE = [1, 2]
+
+SAVE_PATH = "results_v2.csv"
 
 
 #############################################################################################################
@@ -80,7 +91,10 @@ def validate_save_path(save_path):
 
     # If the file already exists, ask what to do
     if os.path.exists(save_path):
-        choice = input(f"Warning: results file '{save_path}' already exists.\n" "continue from last experiment (c), overwrite file (o), or exit (e)? [c/o/e]: ")
+        choice = input(
+            f"Warning: results file '{save_path}' already exists.\n"
+            "continue from last experiment (c), overwrite file (o), or exit (e)? [c/o/e]: "
+        )
         choice = choice.strip().lower()
         if choice == "o":
             print(f"Overwriting '{save_path}'.")
@@ -105,25 +119,53 @@ def load_results(save_path):
     return df
 
 
+def configure_logging(level=logging.ERROR):
+    logging.captureWarnings(True)
+    logging.basicConfig(level=level)
+    logging.getLogger().setLevel(level)
+    
+    # set level for all loggers
+    for name, logger in logging.root.manager.loggerDict.items():
+        if isinstance(logger, logging.Logger):
+            logger.setLevel(level)
+            for h in logger.handlers:
+                h.setLevel(level)
+    
+    os.environ["LOGLEVEL"] = logging.getLevelName(level)
+    os.environ["VLLM_LOGGING_LEVEL"] = logging.getLevelName(level)
+    logging.getLogger("lightning.pytorch").setLevel(level)
+    torch._logging.set_logs(all=level)
+
+
 def print_config():
-    print("Configuration:")
-    print(f" - TAUS_RANGE:       {TAUS_RANGE}")
-    print(f" - target_taus:      {TARGET_TAUS}")
-    print(f" - RATER_PARAMS:     {RATER_PARAMS}")
-    print(f" - GENERATOR_PARAMS: {GENERATOR_PARAMS}")
-    print(f" - EXPERIMENTS:      {EXPERIMENTS}")
-    print(f" - NUM_RUNS:         {NUM_RUNS}")
-    print(f" - BUDGET_RANGE:     {BUDGET_RANGE}")
-    print(f" - DS_CAL_PATH:      {DS_CAL_PATH}")
-    print(f" - DS_TEST_PATH:     {DS_TEST_PATH}")
-    print(f" - MODEL_PATH:       {MODEL_PATH}")
-    print(f" - SAVE_PATH:        {SAVE_PATH}")
+    print("CONFIG:")
+
+    print(f" - Paths:")
+    print(f"   - DS_CAL_PATH:      {DS_CAL_PATH}")
+    print(f"   - DS_TEST_PATH:     {DS_TEST_PATH}")
+    print(f"   - MODEL_PATH:       {MODEL_PATH}")
+    print(f"   - SAVE_PATH:        {SAVE_PATH}")
+
+    print(f" - Parameters:")
+    print(f"   - GENERATOR_PARAMS: {GENERATOR_PARAMS}")
+    print(f"   - RATER_PARAMS:     {RATER_PARAMS}")
+    print(f"   - BATCH_SIZE:       {BATCH_SIZE}")
+    print(f"   - TOXICITY_FUNC:    {TOXICITY_FUNC}")
+    print(f"   - TEXT_PREP_FUNC:   {TEXT_PREP_FUNC}")
+
+    print(f" - Experiment:")
+    print(f"   - TARGET_TAU:       {TARGET_TAUS}")
+    print(f"   - TEST TAUS:        logspace({MIN_TAU_EXP}, {MAX_TAU_EXP}, {NUM_TAUS})")
+    print(f"   - EXPERIMENTS:      {EXPERIMENTS}")
+    print(f"   - NUM_RUNS:         {NUM_RUNS}")
+    print(f"   - BUDGET_RANGE:     {BUDGET_RANGE}")
+
     print("-" * 100)
 
 
 def print_result(result_dict):
     print("-" * 60)
-    print("Experiment Results:")
+    print("EXPERIMENT RESULTS:")
     for key, value in result_dict.items():
         print(f" - {key.ljust(30)}: {value}")
     print("-" * 60)
@@ -186,7 +228,9 @@ def run_experiments():
                     print(f"Skipping {name} with budget {budget} (run {run_num + 1}/{NUM_RUNS}) - already done.")
                     continue
 
-                start_time = time.time()
+                cal_start_time = time.time()
+
+                utils.clear_memory()
 
                 # Call the conformalize function with the specified parameters.
                 result_tuple = conformalize(
@@ -201,11 +245,12 @@ def run_experiments():
                     share_budget=share_budget,
                     min_sample_size=min_sample_size,
                     naive=naive,
-                    text_prep_func="sentence_completion",
+                    toxicity_func=TOXICITY_FUNC,
+                    text_prep_func=TEXT_PREP_FUNC,
                     multi_gpu=torch.cuda.device_count() > 1,
                     plot=False,
                     return_extra=True,
-                    batch_size=1500,
+                    batch_size=BATCH_SIZE,
                 )
 
                 (
@@ -221,21 +266,46 @@ def run_experiments():
                     miscoverage,  # miscoverage rate for each tau
                 ) = result_tuple
 
-                time_delta = time.time() - start_time
+                cal_hours = time.time() - cal_start_time
+                cal_hours = round(cal_hours / (60 * 60), 3)  # convert to hours
 
+                # compute empirical miscoverage on calibration set
                 tau_hat_idx = np.argmin(torch.abs(TAUS_RANGE - tau_hat)).item()
-                tau_hat_miscoverage = miscoverage[tau_hat_idx].item()
-                tau_target_miscoverage = miscoverage[target_tau_idx].item()
+                cal_miscoverage = miscoverage[tau_hat_idx].item()
 
                 # compute total number of generated samples
-                mean_generated_samples = T_tilde.mean().item()
-                mean_c_value = C.mean().item()
+                cal_mean_generated_samples = T_tilde.mean().item()
+                cal_mean_c_value = C.mean().item()
 
-                # compute LPB
+                test_start_time = time.time()
+
+                # compute LPB on test set
                 test_pred_raw = trainer.predict(model, dataloaders=dl_test)
-                test_quantile_est = np.vstack([p["tau"].T for p in test_pred_raw])
-                tau_hat_lpb = test_quantile_est[:, tau_hat_idx].mean().item()
-                tau_target_lpb = test_quantile_est[:, target_tau_idx].mean().item()
+                test_quantile_est = np.vstack([p["tau"].T for p in test_pred_raw]).clip(min=1, max=max_est)
+                tau_hat_pred = test_quantile_est[:, tau_hat_idx].flatten().astype(np.int64)
+                test_mean_lpb = tau_hat_pred.mean().item()
+
+                # Compute empirical miscoverage on test set
+                survival_results = generate_survival_results_generic(
+                    prompts=ds_test,
+                    prompt_ids=list(range(len(ds_test))),
+                    prompt_attempts=(tau_hat_pred - 1).clip(min=0).tolist(),
+                    generate_params={"batch_size": BATCH_SIZE},
+                    generator_params=GENERATOR_PARAMS,
+                    rater_params=RATER_PARAMS,
+                    max_attempts=int(10e6),
+                    toxicity_func=TOXICITY_FUNC,
+                    text_prep_func=TEXT_PREP_FUNC,
+                    multi_gpu=torch.cuda.device_count() > 1,
+                    conserve_memory=True,
+                    conserve_memory_ratings=True,
+                )
+
+                is_miscovered = [(1 if res.is_toxic else 0) for res in survival_results]
+                test_miscoverage = np.mean(is_miscovered)
+
+                test_hours = time.time() - test_start_time
+                test_hours = round(test_hours / (60 * 60), 3)  # convert to hours
 
                 # add results to dataframe
                 result_dict = {
@@ -247,13 +317,13 @@ def run_experiments():
                     "exp_run_num": run_num,
                     "tau_hat": tau_hat,
                     "max_est": max_est,
-                    "calib_tau_hat_miscoverage": tau_hat_miscoverage,
-                    "calib_tau_target_miscoverage": tau_target_miscoverage,
-                    "calib_mean_generated_samples": mean_generated_samples,
-                    "calib_mean_c_value": mean_c_value,
-                    "test_tau_hat_lpb": tau_hat_lpb,
-                    "test_tau_target_lpb": tau_target_lpb,
-                    "time_delta": time_delta,
+                    "cal_hours": cal_hours,
+                    "cal_mean_generated_samples": cal_mean_generated_samples,
+                    "cal_mean_c_value": cal_mean_c_value,
+                    "cal_miscoverage": cal_miscoverage,
+                    "test_miscoverage": test_miscoverage,
+                    "test_mean_lpb": test_mean_lpb,
+                    "test_hours": test_hours,
                 }
 
                 print_result(result_dict)
@@ -271,6 +341,8 @@ def main():
 
     # NOTE: to stop pytorch breaking
     torch.multiprocessing.set_start_method("spawn", force=True)
+
+    configure_logging(logging.ERROR)
 
     run_experiments()
 
