@@ -29,7 +29,7 @@ HF_KEY = utils.api_key_from_file("HF_KEY.txt")
 
 DS_CAL_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
 DS_TEST_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl"
-MODEL_PATH = "saved/Jigsaw_BERT/lightning_logs/version_1/checkpoints/epoch=4-step=970.ckpt"
+MODEL_PATH = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_0/checkpoints/epoch=4-step=495.ckpt"
 
 # Create the parameter dictionary for the rating backend.
 RATER_PARAMS = {
