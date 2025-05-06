@@ -4,17 +4,14 @@ from src.generation.base import *
 import torch
 from huggingface_hub.hf_api import HfFolder
 import numpy as np
-
 import pickle
-
 from src.survival_runner import SurvivalResult, generate_survival_results_generic
-
 from src.datasets import PromptOnlyDataset
-
 import os
 import logging
+import torch._dynamo
 
-utils.clear_memory()
+torch._dynamo.config.suppress_errors = True
 
 
 ###########
@@ -39,10 +36,11 @@ GENERATOR_PARAMS = {
     "torch_dtype": torch.bfloat16,
 }
 
+SUBSET_SIZE = 12000
 BATCH_SIZE = 1500
 MAX_ATTEMPTS = 100
 TOTAL_DATASETS = 100
-RESULTS_FILE = "mini_datasets/multisample_mini_{}.pkl"  # NOTE: make sure name has place for int formatting
+RESULTS_FILE = "mini_datasets/mini_set_{}.pkl"  # NOTE: make sure name has place for int formatting
 
 # start index for saving the results file,
 # i.e saving first dataset in RESULTS_FILE.format(START_IDX), second in RESULTS_FILE.format(START_IDX + 1), ...
@@ -95,6 +93,13 @@ def create_datasets():
 
     # Load the prompts
     prompts = PromptOnlyDataset(PROMPTS_PATH)
+    
+    if SUBSET_SIZE is not None:
+        # choose a random subset of the prompts
+        rng = np.random.default_rng(42)
+        idx = rng.choice(len(prompts), size=SUBSET_SIZE, replace=False)
+        prompts.data = [prompts.data[i] for i in idx]
+    
     print(f"Loaded {len(prompts)} prompts from {PROMPTS_PATH}")
 
     # validate the save path
@@ -102,13 +107,12 @@ def create_datasets():
     start = max(start, START_IDX)
 
     # run
-    for i in range(start, start + TOTAL_DATASETS):
+    for i in range(start, TOTAL_DATASETS):
 
         print("-" * 40)
         print(f"Running iter ({i + 1} / {TOTAL_DATASETS} )")
         print("-" * 40)
 
-        utils.set_seed(i)
         utils.clear_memory()
 
         survival_results = generate_survival_results_generic(
@@ -137,6 +141,8 @@ def create_datasets():
 
 
 def main():
+    
+    utils.clear_memory()
 
     # NOTE: open a new terminal session after running this if you encounter HF token issues
     # in any of the workers or the main process

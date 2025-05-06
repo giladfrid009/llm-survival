@@ -1,6 +1,6 @@
 from vllm import LLM, SamplingParams
 from src.generation.base import *
-from huggingface_hub import login
+from src import utils
 from transformers import AutoTokenizer
 from logging import getLogger
 
@@ -82,3 +82,12 @@ class VanillaGeneratorVLLM(GenerationBackend):
         outputs = self.llm.generate(prompts, self.sampling_params, use_tqdm=False)
         results = [GenerationResult(prompt=prompt, output=output.outputs[0].text.strip()) for prompt, output in zip(prompts, outputs)]
         return results
+
+    def __del__(self):
+        """
+        Clean up resources when the object is deleted.
+        """
+        # Delete the llm object and free the memory
+        if hasattr(self, "llm"):
+            del self.llm
+            utils.full_cleanup()

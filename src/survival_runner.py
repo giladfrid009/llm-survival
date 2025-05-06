@@ -2,7 +2,7 @@ from calendar import c
 from dataclasses import dataclass, field
 import time
 import datetime
-from typing import List, Optional, Callable, Dict, Iterable, Iterator,Any
+from typing import List, Optional, Callable, Dict, Iterable, Iterator, Any
 import os
 import torch
 import concurrent.futures
@@ -121,7 +121,7 @@ class SurvivalRunner:
         if toxicity_func is None:
             toxicity_func = default_toxicity_func
         else:
-            toxicity_func = (lambda x: False)
+            toxicity_func = lambda x: False
         if text_prep_func is None:
             text_prep_func = default_text_prep_func
         else:
@@ -160,8 +160,8 @@ class SurvivalRunner:
     def generate(
         self,
         prompts: Iterable[str],
-        prompt_ids: Optional[Iterable[int]] = None,      # ← NEW
-        max_attempts: Optional[List[int]] = None,        # per-prompt attempt limits
+        prompt_ids: Optional[Iterable[int]] = None,  # ← NEW
+        max_attempts: Optional[List[int]] = None,  # per-prompt attempt limits
         batch_size: int = 10,
         checkpoint_file: Optional[str] = None,
         **kwargs,
@@ -177,15 +177,15 @@ class SurvivalRunner:
             batch_size: number of concurrent in-flight prompts
             checkpoint_file: optional path to resume from previous run
             **kwargs: passed through to generation_runner.generate_batch
-        """                
-        
+        """
+
         if max_attempts is None:
             max_attempts = [self.max_attempts] * len(prompts)
-        
+
         # --- 1) Load & yield any checkpointed results ---
         completed_results: List[SurvivalResult] = []
         if checkpoint_file and os.path.exists(checkpoint_file):
-            with open(checkpoint_file, 'rb') as f:
+            with open(checkpoint_file, "rb") as f:
                 completed_results = pickle.load(f)
             for task in completed_results:
                 yield task
@@ -214,56 +214,54 @@ class SurvivalRunner:
         # --- 5) Iterate in batches, carrying (pid, prompt) ---
         prompt_iter = iter(zip(prompt_ids, prompts, max_attempts))
         active_tasks: List[SurvivalResult] = []
-        
-        def fill_tasks() -> None:            
-            while len(active_tasks) < batch_size:   
+
+        def fill_tasks() -> None:
+            while len(active_tasks) < batch_size:
                 try:
                     pid, prompt, cur_max_attempts = next(prompt_iter)
                 except StopIteration:
                     break
                 # decide per-prompt attempts
                 attempts = min(cur_max_attempts, self.max_attempts)
-                
+
                 task = SurvivalResult(
                     id=pid,
                     prompt=prompt,
                     max_attempts=attempts,
                     num_attempts=0,
                 )
-                
+
                 active_tasks.append(task)
                 self.current_task_id += 1
 
         fill_tasks()
-        
+
         total = len(prompts) if hasattr(prompts, "__len__") else None
         batch_timer = utils.RunningAverage(window_size=10)
         with tqdm(total=(total or 0) + len(completed_results), desc="Processing Prompts") as pbar:
-            
+
             pbar.update(len(completed_results))
 
             while active_tasks:
                 start = time.time()
-                
+
                 # # 0) remove tasks that are already done
                 clean_active_tasks = []
                 for task in active_tasks:
                     if task.num_attempts >= task.max_attempts or task.is_toxic or task.max_attempts <= 0:
                         completed_results.append(task)
                         if checkpoint_file:
-                            with open(checkpoint_file, 'wb') as f:
+                            with open(checkpoint_file, "wb") as f:
                                 pickle.dump(completed_results, f)
                         yield task
                         pbar.update(1)
                     else:
                         clean_active_tasks.append(task)
-                
+
                 active_tasks = clean_active_tasks
-                
+
                 # 1) generate
-                gens = self.generation_runner.generate_batch(
-                    prompts=[t.prompt for t in active_tasks], **kwargs
-                )
+                gens = self.generation_runner.generate_batch(prompts=[t.prompt for t in active_tasks], **kwargs)
                 texts = [self.text_prep_func(g) for g in gens]
                 # 2) rate
                 rates = self.rating_runner.rate_batch(texts, self.conserve_memory_ratings)
@@ -274,7 +272,7 @@ class SurvivalRunner:
                     if done:
                         if checkpoint_file:
                             completed_results.append(task)
-                            with open(checkpoint_file, 'wb') as f:
+                            with open(checkpoint_file, "wb") as f:
                                 pickle.dump(completed_results, f)
                         yield task
                         pbar.update(1)
@@ -295,7 +293,7 @@ class SurvivalRunner:
                     secs = batch_timer.window_average * (left / batch_size) * self.max_attempts
                     metrics["time_remaining"] = datetime.timedelta(seconds=int(secs))
                 pbar.set_postfix(metrics)
-            
+
 
 def survival_runner_factory(
     generator_backend: Optional[Any] = None,
@@ -332,8 +330,9 @@ def survival_runner_factory(
         BATCH_SIZE = generator_params.get("batch_size", 1500)
         GPU_MEMORY_UTILIZATION = generator_params.get("gpu_memory_utilization", 0.5)
         model_name = generator_params.get("model_name", "meta-llama/Llama-3.2-1B")
-        
+
         from src.generation.vanilla_model_vllm import VanillaGeneratorVLLM
+
         generator_backend = VanillaGeneratorVLLM(
             model_name=model_name,
             hf_token=HF_KEY,
@@ -342,14 +341,15 @@ def survival_runner_factory(
             max_batch_size=BATCH_SIZE,
             gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
         )
-    
+
     if rater_backend is None:
         rater_params = rater_params or {}
         model_type = rater_params.get("model_type", "original")
         amp = rater_params.get("amp", True)
         from src.rating.detoxify import DetoxifyRater
+
         rater_backend = DetoxifyRater(model_type=model_type, amp=amp)
-    
+
     return SurvivalRunner(
         generator=generator_backend,
         rater=rater_backend,
@@ -365,7 +365,7 @@ def run_survival_sampling_generic(
     generator_params: Optional[Dict[str, Any]],
     rater_params: Optional[Dict[str, Any]],
     prompts: List[str],
-    prompt_ids: Optional[List[int]] = None,       # ← NEW
+    prompt_ids: Optional[List[int]] = None,  # ← NEW
     prompt_attempts: Optional[List[int]] = None,
     generate_params: Optional[Dict[str, Any]] = None,
     max_attempts: int = 5,
@@ -398,13 +398,17 @@ def run_survival_sampling_generic(
         max_attempts=prompt_attempts,
         **generate_params,
     )
-    return list(results)
+
+    results = list(results)
+    del runner
+    utils.full_cleanup()
+    return results
 
 
 def worker_generic(
     gpu_id: int,
     prompts_chunk: List[str],
-    ids_chunk: Optional[List[int]],             # ← NEW
+    ids_chunk: Optional[List[int]],  # ← NEW
     attempts_chunk: Optional[List[int]],
     generator_params: Optional[Dict[str, Any]],
     rater_params: Optional[Dict[str, Any]],
@@ -434,7 +438,7 @@ def worker_generic(
 
 def generate_survival_results_generic(
     prompts: List[str],
-    prompt_ids: Optional[List[int]] = None,    # ← NEW
+    prompt_ids: Optional[List[int]] = None,  # ← NEW
     prompt_attempts: Optional[List[int]] = None,
     generate_params: Optional[Dict[str, Any]] = None,
     generator_params: Optional[Dict[str, Any]] = None,
@@ -478,16 +482,8 @@ def generate_survival_results_generic(
         raise RuntimeError("No CUDA devices available for multi-GPU processing.")
 
     prompts_chunks = [prompts[i::n_gpus] for i in range(n_gpus)]
-    ids_chunks = (
-        [prompt_ids[i::n_gpus] for i in range(n_gpus)]
-        if prompt_ids is not None
-        else [None] * n_gpus
-    )
-    attempts_chunks = (
-        [prompt_attempts[i::n_gpus] for i in range(n_gpus)]
-        if prompt_attempts is not None
-        else [None] * n_gpus
-    )
+    ids_chunks = [prompt_ids[i::n_gpus] for i in range(n_gpus)] if prompt_ids is not None else [None] * n_gpus
+    attempts_chunks = [prompt_attempts[i::n_gpus] for i in range(n_gpus)] if prompt_attempts is not None else [None] * n_gpus
 
     ctx = get_context("spawn")
     with concurrent.futures.ProcessPoolExecutor(max_workers=n_gpus, mp_context=ctx) as executor:

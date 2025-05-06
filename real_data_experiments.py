@@ -6,8 +6,7 @@ from torch.utils.data import DataLoader
 import pandas as pd
 
 from src.failure_model import ToxicClassifier
-from src.datasets import PromptOnlyDataset
-from src.survival_runner import generate_survival_results_generic
+from src.datasets import PromptOnlyDataset, SurvivalDataset
 from src.conformal import conformalize
 from src import utils
 
@@ -16,6 +15,11 @@ import os
 import sys
 import logging
 
+
+import torch._dynamo
+
+# NOTE: supress more errors, great
+torch._dynamo.config.suppress_errors = True
 
 #############################################################################################################
 # EXPERIMENT PARAMETERS
@@ -28,7 +32,7 @@ HF_KEY = utils.api_key_from_file("HF_KEY.txt")
 # experiment parameters
 
 DS_CAL_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
-DS_TEST_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl"
+DS_TEST_PATH = "data/test_full_light.pkl"
 MODEL_PATH = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_0/checkpoints/epoch=4-step=495.ckpt"
 
 # Create the parameter dictionary for the rating backend.
@@ -65,12 +69,10 @@ EXPERIMENTS = [
 ]
 
 NUM_RUNS = 5
-BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
+# BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
+BUDGET_RANGE = [10, 50, 100, 200]
 
-# NUM_RUNS = 2
-# BUDGET_RANGE = [1, 2]
-
-SAVE_PATH = "results_v2.csv"
+SAVE_PATH = "results.csv"
 
 
 #############################################################################################################
@@ -123,14 +125,14 @@ def configure_logging(level=logging.ERROR):
     logging.captureWarnings(True)
     logging.basicConfig(level=level)
     logging.getLogger().setLevel(level)
-    
+
     # set level for all loggers
     for name, logger in logging.root.manager.loggerDict.items():
         if isinstance(logger, logging.Logger):
             logger.setLevel(level)
             for h in logger.handlers:
                 h.setLevel(level)
-    
+
     os.environ["LOGLEVEL"] = logging.getLevelName(level)
     os.environ["VLLM_LOGGING_LEVEL"] = logging.getLevelName(level)
     logging.getLogger("lightning.pytorch").setLevel(level)
@@ -186,8 +188,11 @@ def run_experiments():
 
     # load data
     ds_cal = PromptOnlyDataset(DS_CAL_PATH)
-    ds_test = PromptOnlyDataset(DS_TEST_PATH)
+    ds_test = SurvivalDataset(DS_TEST_PATH, score_name="toxicity", threshold=0.5)
     dl_test = DataLoader(ds_test, batch_size=1500, shuffle=False)
+
+    # load test set survival times
+    test_t_tilde = np.asanyarray([y[0] for (x, y) in ds_test]).flatten().astype(np.int64)
 
     print(f"Loaded {len(ds_cal)} calibration samples and {len(ds_test)} test samples.")
 
@@ -285,24 +290,8 @@ def run_experiments():
                 tau_hat_pred = test_quantile_est[:, tau_hat_idx].flatten().astype(np.int64)
                 test_mean_lpb = tau_hat_pred.mean().item()
 
-                # Compute empirical miscoverage on test set
-                survival_results = generate_survival_results_generic(
-                    prompts=ds_test,
-                    prompt_ids=list(range(len(ds_test))),
-                    prompt_attempts=(tau_hat_pred - 1).clip(min=0).tolist(),
-                    generate_params={"batch_size": BATCH_SIZE},
-                    generator_params=GENERATOR_PARAMS,
-                    rater_params=RATER_PARAMS,
-                    max_attempts=int(10e6),
-                    toxicity_func=TOXICITY_FUNC,
-                    text_prep_func=TEXT_PREP_FUNC,
-                    multi_gpu=torch.cuda.device_count() > 1,
-                    conserve_memory=True,
-                    conserve_memory_ratings=True,
-                )
-
-                is_miscovered = [(1 if res.is_toxic else 0) for res in survival_results]
-                test_miscoverage = np.mean(is_miscovered)
+                # compute miscoverage upper-bound on test set
+                test_miscoverage = np.mean(test_t_tilde < tau_hat_pred)
 
                 test_hours = time.time() - test_start_time
                 test_hours = round(test_hours / (60 * 60), 3)  # convert to hours
@@ -342,7 +331,10 @@ def main():
     # NOTE: to stop pytorch breaking
     torch.multiprocessing.set_start_method("spawn", force=True)
 
-    configure_logging(logging.ERROR)
+    configure_logging(logging.WARNING)
+    
+    # NOTE: fix more errors in VLLM so fun
+    # os.environ["TORCHINDUCTOR_FORCE_DISABLE_CACHES"] = "1"
 
     run_experiments()
 

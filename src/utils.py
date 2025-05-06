@@ -6,6 +6,10 @@ import numpy
 import random
 import gc
 
+
+import contextlib
+from vllm.distributed import destroy_distributed_environment, destroy_model_parallel
+
 T = TypeVar("T")
 
 
@@ -138,6 +142,24 @@ def clear_memory() -> None:
     with torch.no_grad():
         torch.cuda.empty_cache()
     gc.collect()
+
+
+def full_cleanup():    
+    """
+    Cleans up the environment by destroying distributed and model parallel environments,
+    and clearing CUDA memory.
+    """
+    destroy_model_parallel()
+    destroy_distributed_environment()
+
+    with contextlib.suppress(AssertionError):
+        if torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        
+    clear_memory()
 
 
 def api_key_from_file(path: str) -> str:
