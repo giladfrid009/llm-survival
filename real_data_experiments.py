@@ -31,8 +31,11 @@ HF_KEY = utils.api_key_from_file("HF_KEY.txt")
 
 # experiment parameters
 
-DS_CAL_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
-DS_TEST_PATH = "data/test_full_light.pkl"
+CAL_PROMPTS_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
+
+TEST_PROMPTS_PATH = "data/test_prompt_only.pkl"
+TEST_SURV_TIME_PATH = "data/test_surv_times.npy"
+
 MODEL_PATH = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_0/checkpoints/epoch=4-step=495.ckpt"
 
 # Create the parameter dictionary for the rating backend.
@@ -70,7 +73,7 @@ EXPERIMENTS = [
 
 NUM_RUNS = 5
 # BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
-BUDGET_RANGE = [10, 50, 100, 200]
+BUDGET_RANGE = [10, 25, 50, 100, 200, 300]
 
 SAVE_PATH = "results.csv"
 
@@ -143,24 +146,25 @@ def print_config():
     print("CONFIG:")
 
     print(f" - Paths:")
-    print(f"   - DS_CAL_PATH:      {DS_CAL_PATH}")
-    print(f"   - DS_TEST_PATH:     {DS_TEST_PATH}")
-    print(f"   - MODEL_PATH:       {MODEL_PATH}")
-    print(f"   - SAVE_PATH:        {SAVE_PATH}")
+    print(f"   - CAL_PROMPTS_PATH:  {CAL_PROMPTS_PATH}")
+    print(f"   - TEST_PROMPTS_PATH: {TEST_PROMPTS_PATH}")
+    print(f"   - TEST_SURV_PATH:    {TEST_SURV_TIME_PATH}")
+    print(f"   - MODEL_PATH:        {MODEL_PATH}")
+    print(f"   - SAVE_PATH:         {SAVE_PATH}")
 
     print(f" - Parameters:")
-    print(f"   - GENERATOR_PARAMS: {GENERATOR_PARAMS}")
-    print(f"   - RATER_PARAMS:     {RATER_PARAMS}")
-    print(f"   - BATCH_SIZE:       {BATCH_SIZE}")
-    print(f"   - TOXICITY_FUNC:    {TOXICITY_FUNC}")
-    print(f"   - TEXT_PREP_FUNC:   {TEXT_PREP_FUNC}")
+    print(f"   - GENERATOR_PARAMS:  {GENERATOR_PARAMS}")
+    print(f"   - RATER_PARAMS:      {RATER_PARAMS}")
+    print(f"   - BATCH_SIZE:        {BATCH_SIZE}")
+    print(f"   - TOXICITY_FUNC:     {TOXICITY_FUNC}")
+    print(f"   - TEXT_PREP_FUNC:    {TEXT_PREP_FUNC}")
 
     print(f" - Experiment:")
-    print(f"   - TARGET_TAU:       {TARGET_TAUS}")
-    print(f"   - TEST TAUS:        logspace({MIN_TAU_EXP}, {MAX_TAU_EXP}, {NUM_TAUS})")
-    print(f"   - EXPERIMENTS:      {EXPERIMENTS}")
-    print(f"   - NUM_RUNS:         {NUM_RUNS}")
-    print(f"   - BUDGET_RANGE:     {BUDGET_RANGE}")
+    print(f"   - TARGET_TAU:        {TARGET_TAUS}")
+    print(f"   - TEST TAUS:         logspace({MIN_TAU_EXP}, {MAX_TAU_EXP}, {NUM_TAUS})")
+    print(f"   - EXPERIMENTS:       {EXPERIMENTS}")
+    print(f"   - NUM_RUNS:          {NUM_RUNS}")
+    print(f"   - BUDGET_RANGE:      {BUDGET_RANGE}")
 
     print("-" * 100)
 
@@ -187,12 +191,12 @@ def run_experiments():
         results_df = pd.DataFrame()
 
     # load data
-    ds_cal = PromptOnlyDataset(DS_CAL_PATH)
-    ds_test = SurvivalDataset(DS_TEST_PATH, score_name="toxicity", threshold=0.5)
+    ds_cal = PromptOnlyDataset(CAL_PROMPTS_PATH)
+    ds_test = PromptOnlyDataset(TEST_PROMPTS_PATH)
     dl_test = DataLoader(ds_test, batch_size=1500, shuffle=False)
 
     # load test set survival times
-    test_t_tilde = np.asanyarray([y[0] for (x, y) in ds_test]).flatten().astype(np.int64)
+    test_t_tilde = np.load(TEST_SURV_TIME_PATH)
 
     print(f"Loaded {len(ds_cal)} calibration samples and {len(ds_test)} test samples.")
 
