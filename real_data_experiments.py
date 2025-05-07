@@ -32,7 +32,6 @@ HF_KEY = utils.api_key_from_file("HF_KEY.txt")
 # experiment parameters
 
 CAL_PROMPTS_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
-
 TEST_PROMPTS_PATH = "data/test_prompt_only.pkl"
 TEST_SURV_TIME_PATH = "data/test_surv_times.npy"
 
