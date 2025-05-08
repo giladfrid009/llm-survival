@@ -35,7 +35,7 @@ CAL_PROMPTS_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
 TEST_PROMPTS_PATH = "data/test_prompt_only.pkl"
 TEST_SURV_TIME_PATH = "data/test_surv_times.npy"
 
-MODEL_PATH = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_0/checkpoints/epoch=4-step=495.ckpt"
+MODEL_PATH = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_1/checkpoints/epoch=7-step=792.ckpt"
 
 # Create the parameter dictionary for the rating backend.
 RATER_PARAMS = {
@@ -53,14 +53,14 @@ GENERATOR_PARAMS = {
 }
 
 TARGET_TAUS = torch.tensor([0.1])
-MIN_TAU_EXP = -8
-MAX_TAU_EXP = -0.33
-NUM_TAUS = 500
+MIN_TAU_EXP = -3
+MAX_TAU_EXP = -0.25
+NUM_TAUS = 1000
 TAUS_RANGE = torch.tensor(np.logspace(MIN_TAU_EXP, MAX_TAU_EXP, NUM_TAUS))
 
 TOXICITY_FUNC = None
 TEXT_PREP_FUNC = "sentence_completion"
-BATCH_SIZE = 1500
+BATCH_SIZE = 1300
 
 # name, min_sample_size, share_budget, naive
 EXPERIMENTS = [
@@ -71,7 +71,6 @@ EXPERIMENTS = [
 ]
 
 NUM_RUNS = 5
-# BUDGET_RANGE = torch.logspace(start=1, end=3, steps=10, base=10).int().unique().tolist()
 BUDGET_RANGE = [10, 25, 50, 100, 200, 300]
 
 SAVE_PATH = "results.csv"
@@ -285,19 +284,17 @@ def run_experiments():
                 cal_mean_generated_samples = T_tilde.mean().item()
                 cal_mean_c_value = C.mean().item()
 
-                test_start_time = time.time()
-
                 # compute LPB on test set
                 test_pred_raw = trainer.predict(model, dataloaders=dl_test)
                 test_quantile_est = np.vstack([p["tau"].T for p in test_pred_raw]).clip(min=1, max=max_est)
                 tau_hat_pred = test_quantile_est[:, tau_hat_idx].flatten().astype(np.int64)
                 test_mean_lpb = tau_hat_pred.mean().item()
+                
+                # compute LPB only for predictions which are correct
+                test_mean_covered_lpb = np.mean(tau_hat_pred[test_t_tilde >= tau_hat_pred])
 
                 # compute miscoverage upper-bound on test set
                 test_miscoverage = np.mean(test_t_tilde < tau_hat_pred)
-
-                test_hours = time.time() - test_start_time
-                test_hours = round(test_hours / (60 * 60), 3)  # convert to hours
 
                 # add results to dataframe
                 result_dict = {
@@ -315,7 +312,7 @@ def run_experiments():
                     "cal_miscoverage": cal_miscoverage,
                     "test_miscoverage": test_miscoverage,
                     "test_mean_lpb": test_mean_lpb,
-                    "test_hours": test_hours,
+                    "test_mean_covered_lpb": test_mean_covered_lpb
                 }
 
                 print_result(result_dict)
@@ -334,7 +331,7 @@ def main():
     # NOTE: to stop pytorch breaking
     torch.multiprocessing.set_start_method("spawn", force=True)
 
-    configure_logging(logging.WARNING)
+    configure_logging(logging.ERROR)
     
     # NOTE: fix more errors in VLLM so fun
     # os.environ["TORCHINDUCTOR_FORCE_DISABLE_CACHES"] = "1"
