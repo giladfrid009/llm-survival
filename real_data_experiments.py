@@ -71,7 +71,7 @@ EXPERIMENTS = [
 ]
 
 NUM_RUNS = 5
-BUDGET_RANGE = [10, 25, 50, 100, 200, 300]
+BUDGET_RANGE = [10, 25, 50, 100, 200, 300, 600]
 
 SAVE_PATH = "results.csv"
 
