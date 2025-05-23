@@ -42,7 +42,7 @@ This script:
 > To visualize them without rerunning, simply run:
 >
 > ```bash
-> python real_data_visualization.py
+> jupyter nbconvert --to python --execute real_data_plots.ipynb
 > ```
 
 #### 1. Dataset Creation and Preparation
@@ -73,7 +73,7 @@ python make_mini_sample.py
 
 # Combine the mini datasets
 # Execute each cell in the notebook
-jupyter nbconvert --execute combine_minisets.ipynb
+jupyter nbconvert --to python --execute combine_minisets.ipynb
 ```
 
 #### 4. Running Experiments
@@ -86,7 +86,7 @@ python real_data_experiments.py
 
 # Evaluate the uncalibrated model baseline
 # Execute each cell in the notebook
-jupyter nbconvert --execute real_data_uncalib_experiments.ipynb
+jupyter nbconvert --to python --execute real_data_uncalib_experiments.ipynb
 ```
 
 #### 5. Visualize Results
@@ -94,7 +94,7 @@ jupyter nbconvert --execute real_data_uncalib_experiments.ipynb
 ```bash
 # Create plots from the experimental results
 # Execute each cell in the notebook
-jupyter nbconvert --execute real_data_plots.ipynb
+jupyter nbconvert --to python --execute real_data_plots.ipynb
 ```
 
 ## File Descriptions
