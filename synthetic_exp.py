@@ -254,7 +254,6 @@ def predict(model, input_data):
     model.eval()
     with torch.no_grad():
         prediction = torch.sigmoid(model(x_tensor))
-    print(f"Prediction shape: {prediction.shape}")
     return prediction.detach().numpy()
 
 
