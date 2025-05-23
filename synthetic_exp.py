@@ -1078,7 +1078,7 @@ sns.set(
 fig, axes = plt.subplots(
     nrows=2,
     ncols=len(test_target_taus),
-    figsize=(30, 8),
+    figsize=(30, 14),
     sharex=True
 )
 
@@ -1155,8 +1155,8 @@ fig.legend(
     fontsize=20
 )
 
-plt.subplots_adjust(right=0.85, hspace=10)
-fig.tight_layout(pad=2.0, h_pad=1.0)
+plt.subplots_adjust(right=0.85)
+fig.tight_layout(pad=2.0, h_pad=3.0)
 
 # Save and show
 fig.savefig("figures/coverage_budget_multiple_taus_with_legend.png", dpi=300, bbox_inches="tight")
