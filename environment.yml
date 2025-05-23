@@ -21,3 +21,4 @@ dependencies:
     - accelerate
     - lightning
     - scikit-learn
+    - seaborn
