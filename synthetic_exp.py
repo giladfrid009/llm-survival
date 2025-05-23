@@ -1149,14 +1149,16 @@ handles, labels = axes[1, -1].get_legend_handles_labels()
 fig.legend(
     handles, labels,
     loc="center right",
-    bbox_to_anchor=(1.1, 0.5),
+    bbox_to_anchor=(1.13, 0.5),
     ncol=1,
     frameon=False,
-    fontsize=20
+    fontsize=30
 )
 
 plt.subplots_adjust(right=0.85)
-fig.tight_layout(pad=2.0, h_pad=3.0)
+fig.tight_layout(pad=1.0, h_pad=3.0)
+# Set high resolution
+plt.gcf().set_dpi(300)
 
 # Save and show
 fig.savefig("figures/coverage_budget_multiple_taus_with_legend.png", dpi=300, bbox_inches="tight")
