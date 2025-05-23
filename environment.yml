@@ -20,3 +20,4 @@ dependencies:
     - nltk
     - accelerate
     - lightning
+    - scikit-learn
