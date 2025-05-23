@@ -56,7 +56,7 @@ class ToxicClassifier(pl.LightningModule):
             meta = [item.to(output.device) for item in meta]
         else:
             meta = meta.to(output.device)
-        loss = getattr(self, self.config["loss"])(output, meta, self.config["L1_reg"] if "L1_reg" in self.config.keys() else 0.0)
+        loss = getattr(self, self.config["loss"])(output, meta)
         self.log("train_loss", loss)
         return {"loss": loss}
 
@@ -175,7 +175,7 @@ class ToxicClassifier(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), **self.config["optimizer"]["args"])
 
-    def binary_cross_entropy(self, input, meta, L1_reg=0.0):
+    def binary_cross_entropy(self, input, meta):
         """Custom binary_cross_entropy function.
 
         Args:
@@ -185,16 +185,13 @@ class ToxicClassifier(pl.LightningModule):
         Returns:
             [torch.tensor]: model loss
         """
-        if L1_reg == 0.0:
-            return F.binary_cross_entropy_with_logits(input[:,1], meta.float())
-        else:
-            return F.binary_cross_entropy_with_logits(input[:,1], meta.float()) + L1_reg * torch.mean(self.logits_to_probs(input))
+        return F.binary_cross_entropy_with_logits(input[:,1], meta.float())
 
-    def survival_loss(self, input, meta, L1_reg=0.0):
-        return survival_loss(input, meta, L1_reg)
+    def survival_loss(self, input, meta):
+        return survival_loss(input, meta)
     
-    def prop_loss(self, input, meta, L1_reg=0.0):
-        return prop_loss(input, meta, L1_reg)
+    def prop_loss(self, input, meta):
+        return prop_loss(input, meta)
     
     # def sparsemax_loss(self, input, meta, L1_reg=0.0):
     #     """Custom sparsemax_loss function.

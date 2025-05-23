@@ -12,6 +12,8 @@ from src import datasets
 from src.failure_model import ToxicClassifier
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
 
 def cli_main():
     pl.seed_everything(1234)
