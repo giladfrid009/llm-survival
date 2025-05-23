@@ -1,4 +1,4 @@
-# PAC-Based Lower Bounds on Time to Unsafe Sampling in Generative Models
+# PAC-Based Lower Bounds on Time-to-Unsafe-Sampling in LLMs
 
 This repository contains the code for reproducing the experiments in our paper "PAC-Based Lower Bounds on Time-to-Unsafe-Sampling in LLMs." Our work provides a framework for estimating the time to generate unsafe content in language models with statistical guarantees.
 
