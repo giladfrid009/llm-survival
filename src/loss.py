@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-def survival_loss(input, meta, L1_reg=0.0):
+def survival_loss(input, meta):
     """Custom survival_loss function.
 
     Args:
@@ -15,12 +15,9 @@ def survival_loss(input, meta, L1_reg=0.0):
 
     # Computr the loss using binary cross entropy
     prop_success = delta / t_tilde
-    if L1_reg == 0.0:
-        return F.binary_cross_entropy_with_logits(input[:,1], prop_success, weight=t_tilde)
-    else:
-        return F.binary_cross_entropy_with_logits(input[:,1], prop_success, weight=t_tilde) + L1_reg * torch.mean(torch.sigmoid(input[:,1]))
+    return F.binary_cross_entropy_with_logits(input[:,1], prop_success, weight=t_tilde)
 
-def prop_loss(input, meta, L1_reg=0.0):
+def prop_loss(input, meta):
     """ Custom prop_loss function.
 
     Args:
@@ -31,7 +28,4 @@ def prop_loss(input, meta, L1_reg=0.0):
     Returns:
         [torch.tensor]: model loss, negative log likelihood
     """
-    if L1_reg == 0.0:
-        return F.binary_cross_entropy_with_logits(input[:,1], meta[0].float(), weight=meta[1])
-    else:
-        return F.binary_cross_entropy_with_logits(input[:,1], meta[0].float(), weight=meta[1]) + L1_reg * torch.mean(torch.sigmoid(input[:,1]))
+    return F.binary_cross_entropy_with_logits(input[:,1], meta[0].float(), weight=meta[1])

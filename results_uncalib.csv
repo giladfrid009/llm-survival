@@ -1,2 +1,2 @@
-exp_name,exp_min_sample_size,exp_share_budget,exp_naive,exp_budget,exp_run_num,tau_hat,max_est,cal_hours,cal_mean_generated_samples,cal_mean_c_value,cal_miscoverage,test_miscoverage,test_mean_lpb,test_mean_covered_lpb
-Uncalibrated,,False,False,,0,0.10000000149011612,inf,,,,,0.13566666666666666,532.2369166666666,178.19157346702661
+exp_name,exp_min_sample_size,exp_share_budget,exp_naive,exp_budget,exp_run_num,tau_hat,max_est,cal_hours,cal_mean_generated_samples,cal_mean_c_value,cal_miscoverage,test_miscoverage_upperbound,test_miscoverage_lowerbound,test_mean_lpb,test_mean_covered_lpb
+Uncalibrated,,False,False,,0,0.10000000149011612,inf,,,,,0.05075,0.048916666666666664,71.64333333333333,62.25072425599157

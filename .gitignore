@@ -5,6 +5,8 @@ toxic_binary_classifier.ipynb
 *.pkl
 test_model.ipynb
 *.npy
+configs_legacy
+sampling_tinkering
 
 PERSPECTIVE_API_KEY.txt
 HF_KEY.txt

@@ -23,8 +23,6 @@ from src.loss import survival_loss, prop_loss
 np.random.seed(42)
 torch.manual_seed(42)
 
-
-# %%
 """
 Data Generation
 ---------------
@@ -66,14 +64,6 @@ t_tilde = np.minimum(t_tilde, n_samples)
 # Event indicator: 1 if there is at least one success, else 0.
 e = np.array([1 if yi.any() else 0 for yi in y])
 
-print("Example of first 10 p values:", p[:10])
-print("Example of corresponding empirical probabilities (b/n):", (b[:10] / n_samples[:10]))
-
-# Split the data into training+calibration and test sets.
-# The original order of returned arrays is:
-#   p_train, p_test, x_train, x_test, y_train, y_test, t_tilde_train, t_tilde_test,
-#   e_train, e_test, b_train, b_test, n_samples_train, n_samples_test
-
 (
     p_train,
     p_test,
@@ -91,10 +81,6 @@ print("Example of corresponding empirical probabilities (b/n):", (b[:10] / n_sam
     n_samples_test,
 ) = train_test_split(p, x, y, t_tilde, e, b, n_samples, test_size=0.1, random_state=42)
 
-# Further split the training set into training and calibration subsets.
-# The returned order is:
-#   p_train, p_cal, x_train, x_cal, y_train, y_cal, t_tilde_train, t_tilde_cal,
-#   e_train, e_cal, b_train, b_cal, n_samples_train, n_samples_cal
 (
     p_train,
     p_cal,
@@ -128,8 +114,6 @@ def geom_cdf_stable(k, p):
     # Is still instable for large k, so clip the return value.
     return -np.expm1(k * np.log1p(-p))
 
-
-# %%
 """
 Neural Network Model and Training Function Definitions
 --------------------------------------------------------
@@ -280,7 +264,6 @@ def clip_p(p_vals):
     return np.maximum(1e-30, p_vals)
 
 
-# %%
 """
 Train the Proportional Model
 ----------------------------
@@ -308,36 +291,6 @@ prop_model = train(
 prop_pred = predict(prop_model, x_test)
 prop_pred = prop_pred[sort_idx]  # Ensure predictions are sorted along with p_test.
 
-
-# %%
-"""
-Data Summary and Prediction Plotting
---------------------------------------
-Print out feature statistics and plot true versus predicted p.
-"""
-
-print("Mean e:", e.mean())
-print("Mean p:", p.mean())
-print("Mean t_tilde:", t_tilde.mean())
-print("Mean b:", b.mean())
-print("Mean n_samples:", n_samples.mean())
-print("Mean proportional model prediction:", prop_pred.mean())
-
-plt.figure()
-plt.yscale("log")
-plt.xscale("log")
-empirical_pct_train = b_train / n_samples_train
-nonzero_train = empirical_pct_train > 0
-plt.scatter(p_train[nonzero_train], p_train[nonzero_train], label="True p", c=empirical_pct_train[nonzero_train], cmap="viridis")
-plt.plot(p_test, prop_pred, label="Proportional model")
-plt.xlabel("True p")
-plt.ylabel("Predicted p")
-plt.legend()
-plt.colorbar()
-plt.show()
-
-
-# %%
 """
 Quantile Estimation Function
 -----------------------------
@@ -358,18 +311,6 @@ def quantile_estimators(preds, taus):
 # Compute the 0.1 quantile for the proportional model predictions.
 q_prop = quantile_estimators(prop_pred, [0.1])[0]
 
-plt.figure()
-plt.xscale("log")
-plt.yscale("log")
-plt.plot(p_test, stats.geom.ppf(0.1, p=p_test), label="GT Geometric")
-plt.plot(p_test, q_prop, label="Proportional")
-plt.xlabel("True p")
-plt.ylabel("0.1 quantile")
-plt.legend()
-plt.show()
-
-
-# %%
 """
 Coverage and Utility Functions
 ------------------------------
@@ -428,7 +369,7 @@ def solve_optimization(w, b_rhs, tol=1e-8):
     """
     w = np.array(w, dtype=float)
     if b_rhs > np.sum(w):
-        raise ValueError("The constraint b_rhs cannot exceed the sum of weights.")
+        return np.ones_like(w), np.inf
 
     lambda_low = 1e-12
     lambda_high = max(1 / w) * 10.0
@@ -445,8 +386,6 @@ def solve_optimization(w, b_rhs, tol=1e-8):
     p_opt = np.minimum(1, 1 / np.sqrt(lambda_star * w))
     return p_opt, lambda_star
 
-
-# %%
 
 import scipy
 
@@ -532,7 +471,7 @@ def conformalize(
     T_tilde_miscoverage = np.where(T_tilde_resampled < quantile_est, 1, 0)
 
     # Estimate miscoverage for each candidate quantile.
-    tau_hats = (weights_adjusted * T_tilde_miscoverage).sum(axis=1) / weights_adjusted.sum(axis=1)
+    tau_hats = (weights_adjusted * T_tilde_miscoverage).mean(axis=1)
     tau_diff = target_taus - tau_hats[:, np.newaxis]
     smallest_pos = np.where(tau_diff > 0, 1, -1 * np.inf).cumsum(axis=0).argmax(axis=0)
     a_hats = candidate_taus[smallest_pos]
@@ -540,8 +479,6 @@ def conformalize(
 
     return a_hats, max_estimator, C_probs, mean_n_samples
 
-
-# %%
 """
 Calibration and Conformalization
 ----------------------------------
@@ -550,251 +487,30 @@ Predict on the calibration set and apply conformalization to adjust quantile est
 
 # Define the target and candidate quantiles.
 target_taus = np.array([0.1])
-candidate_taus = np.logspace(-3, -0.66, 300)
+candidate_taus = np.logspace(-3, -0.75, 300)
 
 # Predict probabilities on the calibration set for the proportional model.
 prop_pred_cal = predict(prop_model, x_cal)
 
-budget_per_sample = 1000
-
-# Conformalize the predictions; pass p_cal explicitly.
-conformalized_prop, _, C_probs_prop, mean_n_samples_prop = conformalize(
-    prop_pred_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample
-)
-
-conformalized_prop_min, max_est_surv, C_probs_prop_min, mean_n_samples_prop_min = conformalize(
-    prop_pred_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample, min_sample_size=0.1, share_budget=True
-)
-
-# Extract scalar quantiles.
-conformalized_prop = conformalized_prop[0]
-conformalized_prop_min = conformalized_prop_min[0]
-
-print(f"Conformalized proportional quantile: {conformalized_prop}")
-print(f"Conformalized proportional quantile with min sample size 0.1: {conformalized_prop_min}")
-
-# Predict quantiles for the test set based on the proportional model.
-q_prop_conf = quantile_estimators(prop_pred, [conformalized_prop])[0].astype(int)
-q_prop_conf_min = np.minimum(quantile_estimators(prop_pred, [conformalized_prop_min])[0], max_est_surv).astype(int)
-
-# Conformalize using the naive method as well.
-conformalized_prop_naive, _, C_probs_prop_naive, _ = conformalize(
-    prop_pred_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample, naive=True
-)
-q_prop_conf_naive = quantile_estimators(prop_pred, [conformalized_prop_naive])[0].astype(int)
-
-# Ground truth quantiles using true test-set p.
-q_gt = stats.geom.ppf(0.1, p=p_test).astype(int)
-
-# Conformalize the ground truth probabilities as well.
-conformalized_gt, _, C_probs_gt, mean_n_samples_gt = conformalize(
-    p_cal, p_cal, target_taus, candidate_taus, n_samples_cal, t_tilde_cal, budget_per_sample
-)
-q_gt_conf = quantile_estimators(p_test, conformalized_gt)[0].astype(int)
-
-# Plot the conformalized quantiles.
-plt.figure()
-plt.xscale("log")
-plt.yscale("log")
-plt.plot(p_test, stats.geom.ppf(0.1, p=p_test), label="GT Geometric")
-plt.plot(p_test, q_prop, label="Proportional")
-plt.plot(p_test, q_prop_conf, label="Conformalized Proportional")
-plt.plot(p_test, q_prop_conf_min, label="Conformalized Proportional min 0.1")
-plt.plot(p_test, q_prop_conf_naive, label="Conformalized Proportional naive")
-plt.plot(p_test, q_gt, label="GT Geometric")
-plt.plot(p_test, q_gt_conf, label="Conformalized GT Geometric")
-plt.xlabel("True p")
-plt.ylabel("0.1 quantile")
-plt.legend()
-plt.show()
-
-
-# %%
-"""
-Coverage Plots and Statistics
------------------------------
-Plot coverage curves and output mean coverage values.
-"""
-
-plt.figure()
-plt.xscale("log")
-plt.hlines(0.9, p_test.min(), p_test.max(), label="90% coverage", color="black", linestyle="--")
-plt.plot(p_test, coverage(q_prop, p_vals=p_test), label="Uncalibrated")
-plt.plot(p_test, coverage(q_prop_conf_naive, p_vals=p_test), label="Naive")
-plt.plot(p_test, coverage(q_prop_conf, p_vals=p_test), label="Regular")
-plt.plot(p_test, coverage(q_prop_conf_min, p_vals=p_test), label="Capped")
-plt.xlabel("True p")
-plt.ylabel("Coverage")
-plt.legend()
-plt.show()
-
-print("Proportional model mean coverage:", coverage(q_prop, p_vals=p_test).mean())
-print("Conformalized proportional model naive mean coverage:", coverage(q_prop_conf_naive, p_vals=p_test).mean())
-print("Conformalized proportional model mean coverage:", coverage(q_prop_conf, p_vals=p_test).mean())
-print("Conformalized proportional model min 0.1 mean coverage:", coverage(q_prop_conf_min, p_vals=p_test).mean())
-
-
-# %%
-"""
-Conformalization Repeated with Violin Plots
--------------------------------------------
-Run multiple conformalizations and visualize the distributions of mean coverage and quantile (LPB) values.
-"""
-
-n_conformalizations = 20
-mean_coverages_prop = [coverage(q_prop, p_vals=p_test).mean()]
-mean_LPB_prop = [q_prop.mean()]
-mean_coverages_prop_conf_naive = []
-mean_LPB_prop_conf_naive = []
-mean_coverages_prop_conf = []
-mean_LPB_prop_conf = []
-mean_coverages_prop_conf_min = []
-mean_LPB_prop_conf_min = []
-mean_coverages_prop_conf_min_shared = []
-mean_LPB_prop_conf_min_shared = []
-
-for _ in tqdm.tqdm(range(n_conformalizations)):
-    c_prop, _, _, mean_n_samples_prop = conformalize(
-        prop_pred_cal,
-        p_cal,
-        target_taus,
-        candidate_taus,
-        n_samples_cal,
-        t_tilde_cal,
-        budget_per_sample,
-    )
-    c_prop_naive, _, _, mean_n_samples_naive = conformalize(
-        prop_pred_cal,
-        p_cal,
-        target_taus,
-        candidate_taus,
-        n_samples_cal,
-        t_tilde_cal,
-        budget_per_sample,
-        naive=True,
-    )
-    c_prop_min, max_est, _, mean_n_samples_min = conformalize(
-        prop_pred_cal,
-        p_cal,
-        target_taus,
-        candidate_taus,
-        n_samples_cal,
-        t_tilde_cal,
-        budget_per_sample,
-        min_sample_size=0.01,
-    )
-    c_prop_min_shared, max_est_shared, _, mean_n_samples_shared = conformalize(
-        prop_pred_cal,
-        p_cal,
-        target_taus,
-        candidate_taus,
-        n_samples_cal,
-        t_tilde_cal,
-        budget_per_sample,
-        min_sample_size=0.01,
-        share_budget=True,
-    )
-    q_prop_conf = quantile_estimators(prop_pred, [c_prop[0]])[0].astype(int)
-    q_prop_conf_naive = quantile_estimators(prop_pred, [c_prop_naive[0]])[0].astype(int)
-    q_prop_conf_min = np.minimum(quantile_estimators(prop_pred, [c_prop_min[0]])[0], max_est).astype(int)
-    q_prop_conf_min_shared = np.minimum(quantile_estimators(prop_pred, [c_prop_min_shared[0]])[0], max_est_shared).astype(int)
-
-    mean_coverages_prop_conf.append(coverage(q_prop_conf, p_vals=p_test).mean())
-    mean_LPB_prop_conf.append(q_prop_conf.mean())
-    mean_coverages_prop_conf_naive.append(coverage(q_prop_conf_naive, p_vals=p_test).mean())
-    mean_LPB_prop_conf_naive.append(q_prop_conf_naive.mean())
-    mean_coverages_prop_conf_min.append(coverage(q_prop_conf_min, p_vals=p_test).mean())
-    mean_LPB_prop_conf_min.append(q_prop_conf_min.mean())
-    mean_coverages_prop_conf_min_shared.append(coverage(q_prop_conf_min_shared, p_vals=p_test).mean())
-    mean_LPB_prop_conf_min_shared.append(q_prop_conf_min_shared.mean())
-
-plt.figure()
-plt.hlines(0.9, 0.5, 5.5, label="90% coverage", color="red", linestyle="--")
-
-plt.violinplot(
-    [
-        mean_coverages_prop,
-        mean_coverages_prop_conf_naive,
-        mean_coverages_prop_conf,
-        mean_coverages_prop_conf_min,
-        mean_coverages_prop_conf_min_shared,
-    ],
-    showmeans=True,
-)
-
-# Rotate x-axis labels and align them nicely.
-plt.xticks([1, 2, 3, 4, 5], ["Uncalibrated", "Naive\nBudgeting", "Adaptive\nBudgeting", "Capped Adaptive\nBudgeting", "Global\nBudgeting"])
-
-plt.ylabel("Mean coverage")
-plt.tight_layout()
-plt.show()
-
-print("Mean coverage proportional model:", np.mean(mean_coverages_prop))
-print("Mean coverage conformalized proportional model naive:", np.mean(mean_coverages_prop_conf_naive))
-print("Mean coverage conformalized proportional model:", np.mean(mean_coverages_prop_conf))
-print("Mean coverage conformalized proportional model min 0.1:", np.mean(mean_coverages_prop_conf_min))
-print("Mean coverage conformalized proportional model min 0.1 shared:", np.mean(mean_coverages_prop_conf_min_shared))
-
-
-# %%
-"""
-Plot Mean LPB (Quantile) Comparisons
-------------------------------------
-Visualize the distribution of quantile predictions (LPB) using violin plots.
-"""
-
-plt.figure()
-plt.violinplot([mean_LPB_prop, mean_LPB_prop_conf_naive, mean_LPB_prop_conf, mean_LPB_prop_conf_min, mean_LPB_prop_conf_min_shared])
-
-# Rotate x-axis labels and align them nicely.
-plt.xticks([1, 2, 3, 4, 5], ["Uncalibrated", "Naive\nBudgeting", "Adaptive\nBudgeting", "Capped Adaptive\nBudgeting", "Global\nBudgeting"])
-plt.ylabel("Mean LPB")
-plt.yscale("log")
-plt.show()
-
-
-# %%
-"""
-Plot Calibration Probabilities (C_probs)
-------------------------------------------
-Sort the calibration probabilities for different methods and plot them.
-"""
-
-sort_idx_cal = np.argsort(p_cal)
-p_cal_sorted = p_cal[sort_idx_cal]
-C_probs_prop_sorted = C_probs_prop[sort_idx_cal]
-C_probs_prop_min_sorted = C_probs_prop_min[sort_idx_cal]
-C_probs_gt_sorted = C_probs_gt[sort_idx_cal]
-
-plt.figure()
-plt.xscale("log")
-plt.yscale("log")
-plt.scatter(p_cal_sorted, C_probs_prop_sorted, label="Proportional")
-plt.scatter(p_cal_sorted, C_probs_prop_min_sorted, label="Proportional min 0.1")
-plt.scatter(p_cal_sorted, C_probs_gt_sorted, label="GT Geometric")
-plt.xlabel("True p")
-plt.ylabel("C_probs")
-plt.legend()
-plt.show()
-
-# %%
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import tqdm
 import seaborn as sns
 
-
 def vary_budget_per_sample(
     budgets,
     p_cal,
+    p_test,
     prop_pred_cal,
+    prop_pred_test,
     n_samples_cal,
     t_tilde_cal,
     n_conformalizations=20,
     min_sample_size=0,
     share_budget=False,
     naive=False,
+    resplit=False,
 ):
     """
     Vary the budget_per_sample and compute mean coverage and LPB for each budget.
@@ -802,12 +518,16 @@ def vary_budget_per_sample(
     Parameters:
         budgets (iterable): The different values to use for budget_per_sample.
         p_cal: Calibration p-values or any calibration parameter required by conformalize.
+        p_test: Test p-values or any test parameter required by coverage.
         prop_pred_cal: Calibrated propensity score predictions.
+        prop_pred_test: Test propensity score predictions.
         n_samples_cal: Number of random samples for calibration.
         t_tilde_cal: A calibration threshold or related parameter.
         n_conformalizations (int): Number of conformalization runs per budget value.
         min_sample_size (float): Minimum sample size parameter to pass to conformalize.
         share_budget (bool): Whether to share the budget among the samples.
+        naive (bool): Whether to use the naive method for conformalization.
+        resplit (bool): Whether to resplit the calibration and test sets.
 
     Returns:
         coverage_df (pd.DataFrame): DataFrame with rows as budget values and columns as
@@ -818,6 +538,21 @@ def vary_budget_per_sample(
     coverage_df = pd.DataFrame(index=budgets, columns=range(n_conformalizations))
     LPB_df = pd.DataFrame(index=budgets, columns=range(n_conformalizations))
     mean_samples_df = pd.DataFrame(index=budgets, columns=range(n_conformalizations))
+
+    # Resplit the calibration and test sets
+    if resplit:
+        # Merge the calibration and test sets.
+        p_cal = np.concatenate([p_cal, p_test])
+        prop_pred_cal = np.concatenate([prop_pred_cal, prop_pred_test])
+        # Shuffle the merged set.
+        sort_idx = np.random.permutation(len(p_cal))
+        p_cal = p_cal[sort_idx]
+        prop_pred_cal = prop_pred_cal[sort_idx]
+        # Split the merged set back into calibration and test sets.
+        p_test = p_cal[:len(p_test)]
+        prop_pred_test = prop_pred_cal[:len(p_test)]
+        p_cal = p_cal[len(p_test):]
+        prop_pred_cal = prop_pred_cal[len(p_test):]
 
     # Loop over each budget value.
     for budget in budgets:
@@ -863,10 +598,10 @@ results = {}
 
 # Define experiments with parameters: (label, min_sample_size, share_budget, naive).
 experiments = [
-    ("Fixed Budgeting", 0, False, True),
-    ("Adaptive Budgeting", 0, False, False),
-    ("Capped Adaptive Budgeting", 0.01, False, False),
-    ("Global Budgeting", 0.01, True, False),
+    ("Naive", 0, False, True),
+    ("Basic", 0, False, False),
+    ("Trimmed", 0.01, False, False),
+    ("Optimized", 0.01, True, False),
 ]
 
 # Run the experiments.
@@ -876,7 +611,9 @@ for label, min_sample_size, share_budget, naive in experiments:
     cov_df, lpb_df, mean_samples_df = vary_budget_per_sample(
         budgets,
         p_cal,
+        p_test,
         prop_pred_cal,
+        prop_pred,
         n_samples_cal,
         t_tilde_cal,
         n_conformalizations=20,
@@ -923,13 +660,17 @@ mean_samples_all = pd.concat(mean_samples_list, ignore_index=True)
 # --- Plotting with Seaborn ---
 
 sns.set(
-    style="whitegrid", context="notebook", font_scale=2.5  # other options: paper, talk, poster  # adjust this multiplier to scale fonts
+    style="whitegrid", context="notebook", font_scale=2.5,
+    rc={
+      "lines.linewidth": 5,    # default line width
+      "lines.markersize": 15   # default marker size
+    }
 )
 
 # Set the seaborn style.
 # sns.set(style="whitegrid")
 
-plt.figure(figsize=(30, 10))
+plt.figure(figsize=(30, 8))
 
 # Coverage plot.
 plt.subplot(1, 3, 1)
@@ -938,10 +679,9 @@ sns.lineplot(data=coverage_all, x="Budget", y="Coverage", hue="Experiment", mark
 plt.hlines(0.9, budgets.min(), budgets.max(), label="90% coverage", color="gray", linestyle="--")
 # Plot the uncalibrated coverage line.
 plt.hlines(coverage(q_prop, p_vals=p_test).mean(), budgets.min(), budgets.max(), label="Uncalibrated", color="black")
-plt.title("Coverage vs Budget")
-plt.xlabel("Budget per Sample")
+plt.xlabel("Average budget per prompt")
 plt.xlim(0, budgets.max())
-plt.ylabel("Mean Coverage")
+plt.ylabel("Coverage")
 # Remove the legend.
 plt.legend().remove()
 
@@ -950,26 +690,25 @@ plt.subplot(1, 3, 3)
 plt.yscale("log")
 sns.lineplot(data=lpb_all, x="Budget", y="LPB", hue="Experiment", marker="o", errorbar="sd")
 # Plot the uncalibrated prediction line.
-plt.hlines(q_prop.mean(), budgets.min(), budgets.max(), label="Uncalibrated", color="black", linestyle="--")
-plt.title("LPB vs Budget")
-plt.xlabel("Budget per Sample")
+plt.hlines(q_prop.mean(), budgets.min(), budgets.max(), label="Uncalibrated", color="black")
+plt.xlabel("Average budget per prompt")
 plt.xlim(0, budgets.max())
-plt.ylabel("Mean LPB")
+plt.ylabel("Average LPB")
 plt.legend(loc="lower right", fontsize=26)
 
 # Mean samples plot.
 plt.subplot(1, 3, 2)
 sns.lineplot(data=mean_samples_all, x="Budget", y="Mean Samples", hue="Experiment", marker="o", errorbar="sd")
-plt.title("Mean Samples vs Budget")
-plt.xlabel("Budget per Sample")
+plt.xlabel("Average budget per prompt")
 plt.xlim(0, budgets.max())
-plt.ylabel("Mean Samples")
+plt.ylabel("Average # of generations")
 
 plt.tight_layout()
 # Set the resolution of the plot.
 plt.gcf().set_dpi(300)
 plt.legend().remove()
 plt.show()
+plt.savefig("figures/coverage_budget.png", dpi=300, bbox_inches="tight")
 
 
 # %%
@@ -977,12 +716,15 @@ plt.show()
 def vary_min_sample_size(
     min_sample_sizes,
     p_cal,
+    p_test,
     prop_pred_cal,
+    prop_pred_test,
     n_samples_cal,
     t_tilde_cal,
     n_conformalizations=20,
     budget_per_sample=1000,
     share_budget=False,
+    resplit=False,
 ):
     """
     Vary the min_sample_size and compute mean coverage and LPB for each sample size.
@@ -990,12 +732,15 @@ def vary_min_sample_size(
     Parameters:
         min_sample_sizes (iterable): The different values to use for min_sample_size.
         p_cal: Calibration p-values or any calibration parameter required by conformalize.
+        p_test: Test p-values or any test parameter required by conformalize.
         prop_pred_cal: Calibrated propensity score predictions.
+        prop_pred_test: Test set predictions.
         n_samples_cal: Number of random samples for calibration.
         t_tilde_cal: A calibration threshold or related parameter.
         n_conformalizations (int): Number of conformalization runs per sample size value.
         budget_per_sample (float): Budget allocated per sample.
         share_budget (bool): Whether to share the budget among the samples.
+        resplit (bool): Whether to mix and resplit the calibration and test sets.
 
     Returns:
         coverage_df (pd.DataFrame): DataFrame with rows as min_sample_size values and columns as
@@ -1005,6 +750,20 @@ def vary_min_sample_size(
     # Initialize DataFrames with min_sample_sizes as index and conformalization iteration indices as columns.
     coverage_df = pd.DataFrame(index=min_sample_sizes, columns=range(n_conformalizations))
     LPB_df = pd.DataFrame(index=min_sample_sizes, columns=range(n_conformalizations))
+
+    if resplit:
+        # Merge the calibration and test sets.
+        p_cal = np.concatenate([p_cal, p_test])
+        prop_pred_cal = np.concatenate([prop_pred_cal, prop_pred_test])
+        # Shuffle the merged set.
+        sort_idx = np.random.permutation(len(p_cal))
+        p_cal = p_cal[sort_idx]
+        prop_pred_cal = prop_pred_cal[sort_idx]
+        # Split the merged set back into calibration and test sets.
+        p_test = p_cal[:len(p_test)]
+        prop_pred_test = prop_pred_cal[:len(p_test)]
+        p_cal = p_cal[len(p_test):]
+        prop_pred_cal = prop_pred_cal[len(p_test):]
 
     # Loop over each min_sample_size value.
     for min_sample_size in min_sample_sizes:
@@ -1039,13 +798,14 @@ def vary_min_sample_size(
 
 
 # Define a range of min_sample_sizes to test.
-min_sample_sizes = np.linspace(1e-4, 0.1, 10)
+max_weight_sizes = np.logspace(1, 14, 14, base=2)
+min_sample_sizes = 1 / max_weight_sizes
 # Dictionary to store results for each experimental condition.
 results_min_sample = {}
 # Define experiments with parameters: (label, n_samples_cal, share_budget).
 experiments_min_sample = [
-    ("Capped Adaptive Budgeting", 100 * np.ones(len(p_cal)), False),
-    ("Global Budgeting", 100 * np.ones(len(p_cal)), True),
+    ("Trimmed", 100 * np.ones(len(p_cal)), False),
+    ("Optimized", 100 * np.ones(len(p_cal)), True),
 ]
 # Run the experiments.
 for label, n_samples_cal, share_budget in experiments_min_sample:
@@ -1053,7 +813,9 @@ for label, n_samples_cal, share_budget in experiments_min_sample:
     cov_df, lpb_df = vary_min_sample_size(
         min_sample_sizes,
         p_cal,
+        p_test,
         prop_pred_cal,
+        prop_pred,
         n_samples_cal,
         t_tilde_cal,
         n_conformalizations=20,
@@ -1085,30 +847,318 @@ lpb_all_min_sample = pd.concat(lpb_list_min_sample, ignore_index=True)
 # --- Plotting with Seaborn ---
 # Set the seaborn style.
 sns.set(
-    style="whitegrid", context="notebook", font_scale=1.5  # other options: paper, talk, poster  # adjust this multiplier to scale fonts
+    style="whitegrid", context="notebook", font_scale=2.5,
+    rc={
+      "lines.linewidth": 5,    # default line width
+      "lines.markersize": 15   # default marker size
+    }
 )
 # Set the resolution of the plot.
 plt.gcf().set_dpi(300)
 plt.figure(figsize=(14, 6))
+
+coverage_all_min_sample["Max Weight"] = 1.0 / coverage_all_min_sample["Min Sample Size"]
+lpb_all_min_sample["Max Weight"] = 1.0 / lpb_all_min_sample["Min Sample Size"]
+
 # Coverage plot.
 plt.subplot(1, 2, 1)
-sns.lineplot(data=coverage_all_min_sample, x="Min Sample Size", y="Coverage", hue="Experiment", marker="o", errorbar="sd")
+# Set the color of the optimized method to red and the trimmed method to green, both in the plot and the legend.
+colors = sns.color_palette("tab10", 5)
+palette = {
+    "Optimized": colors[3],
+    "Trimmed":   colors[2]
+}
+
+# draw the lineplot
+ax = sns.lineplot(
+    data=coverage_all_min_sample,
+    x="Max Weight", 
+    y="Coverage",
+    hue="Experiment",
+    palette=palette,
+    marker="o",
+    errorbar="sd"
+)
+# Plot the 90% coverage line.
+plt.hlines(0.9, coverage_all_min_sample["Max Weight"].min(), coverage_all_min_sample["Max Weight"].max(), label="90% coverage", color="gray", linestyle="--")
 # Write the title in Latex, Coverage vs \pi_{\text{min}}
-plt.title(r"Coverage vs $\pi_{\text{min}}$")
-plt.xlabel(r"$\pi_{\text{min}}$")
-plt.xlim(0, 0.1)
+plt.xlabel(r"$w_{\text{max}}$")
+plt.xlim(coverage_all_min_sample["Max Weight"].min(), coverage_all_min_sample["Max Weight"].max())
 plt.ylabel("Mean Coverage")
 # LPB plot, log scale.
+plt.xscale("log")
 plt.legend().remove()
 plt.hlines(0.9, 0, 0.1, label="90% coverage", color="gray", linestyle="--")
 plt.subplot(1, 2, 2)
 plt.yscale("log")
-sns.lineplot(data=lpb_all_min_sample, x="Min Sample Size", y="LPB", hue="Experiment", marker="o", errorbar="sd")
-plt.title(r"LPB vs $\pi_{\text{min}}$")
-plt.xlabel(r"$\pi_{\text{min}}$")
-plt.xlim(0, 0.1)
+plt.xscale("log")
+sns.lineplot(data=lpb_all_min_sample, x="Max Weight", y="LPB", hue="Experiment", marker="o", errorbar="sd", palette=palette)
+plt.xlabel(r"$w_{\text{max}}$")
+plt.xlim(lpb_all_min_sample["Max Weight"].min(), lpb_all_min_sample["Max Weight"].max())
 plt.ylabel("Mean LPB")
-plt.legend(loc="upper right")
+plt.legend(loc="lower right")
 plt.tight_layout()
+plt.show()
+plt.savefig("figures/coverage_min_sample_size.png", dpi=300, bbox_inches="tight")
+# %%
+# Run the same budget experiment but with resplitting the calibration and test sets
+# Use all the same parameters as before
+
+# Define a range of budgets to test.
+budgets = np.linspace(10, 10000, 10)
+
+# Dictionary to store results for each experimental condition.
+results = {}
+
+# Define experiments with parameters: (label, min_sample_size, share_budget, naive).
+experiments = [
+    ("Naive", 0, False, True),
+    ("Basic", 0, False, False),
+    ("Trimmed", 0.01, False, False),
+    ("Optimized", 0.01, True, False),
+]
+
+# Run the experiments.
+for label, min_sample_size, share_budget, naive in experiments:
+    print(f"Running experiment: {label}")
+    print(label, min_sample_size, share_budget, naive)
+    cov_df, lpb_df, mean_samples_df = vary_budget_per_sample(
+        budgets,
+        p_cal,
+        p_test,
+        prop_pred_cal,
+        prop_pred,
+        n_samples_cal,
+        t_tilde_cal,
+        n_conformalizations=20,
+        min_sample_size=min_sample_size,
+        share_budget=share_budget,
+        naive=naive,
+    )
+    results[label] = (cov_df, lpb_df, mean_samples_df)
+
+# --- Prepare Data for Seaborn ---
+
+# For Coverage: Convert each DataFrame from wide to long format
+coverage_list = []
+for label, (cov_df, _, _) in results.items():
+    # Reset index to turn the budget values into a column,
+    # then melt the iteration columns into a long format.
+    cov_long = cov_df.reset_index().rename(columns={"index": "Budget"})
+    cov_melt = cov_long.melt(id_vars="Budget", var_name="Iteration", value_name="Coverage")
+    cov_melt["Experiment"] = label
+    coverage_list.append(cov_melt)
+coverage_all = pd.concat(coverage_list, ignore_index=True)
+
+# For LPB: Convert each DataFrame from wide to long format.
+lpb_list = []
+for label, (_, lpb_df, _) in results.items():
+    lpb_long = lpb_df.reset_index().rename(columns={"index": "Budget"})
+    lpb_melt = lpb_long.melt(id_vars="Budget", var_name="Iteration", value_name="LPB")
+    lpb_melt["Experiment"] = label
+    lpb_list.append(lpb_melt)
+lpb_all = pd.concat(lpb_list, ignore_index=True)
+
+# For Mean Samples: Convert each DataFrame from wide to long format.
+mean_samples_list = []
+for label, (_, _, mean_samples_df) in results.items():
+    mean_samples_long = mean_samples_df.reset_index().rename(columns={"index": "Budget"})
+    mean_samples_melt = mean_samples_long.melt(id_vars="Budget", var_name="Iteration", value_name="Mean Samples")
+    mean_samples_melt["Experiment"] = label
+    mean_samples_list.append(mean_samples_melt)
+mean_samples_all = pd.concat(mean_samples_list, ignore_index=True)
+
+
+# %%
+
+# --- Plotting with Seaborn ---
+
+sns.set(
+    style="whitegrid", context="notebook", font_scale=2.5,
+    rc={
+      "lines.linewidth": 5,    # default line width
+      "lines.markersize": 15   # default marker size
+    }
+)
+
+# Set the seaborn style.
+# sns.set(style="whitegrid")
+
+plt.figure(figsize=(30, 8))
+
+# Coverage plot.
+plt.subplot(1, 3, 1)
+sns.lineplot(data=coverage_all, x="Budget", y="Coverage", hue="Experiment", marker="o", errorbar="sd")
+# Plot the 90% coverage line.
+plt.hlines(0.9, budgets.min(), budgets.max(), label="90% coverage", color="gray", linestyle="--")
+# Plot the uncalibrated coverage line.
+plt.hlines(coverage(q_prop, p_vals=p_test).mean(), budgets.min(), budgets.max(), label="Uncalibrated", color="black")
+plt.xlabel("Average budget per prompt")
+plt.xlim(0, budgets.max())
+plt.ylabel("Coverage")
+# Remove the legend.
+plt.legend().remove()
+
+# LPB plot, log scale.
+plt.subplot(1, 3, 3)
+plt.yscale("log")
+sns.lineplot(data=lpb_all, x="Budget", y="LPB", hue="Experiment", marker="o", errorbar="sd")
+# Plot the uncalibrated prediction line.
+plt.hlines(q_prop.mean(), budgets.min(), budgets.max(), label="Uncalibrated", color="black")
+plt.xlabel("Average budget per prompt")
+plt.xlim(0, budgets.max())
+plt.ylabel("Average LPB")
+plt.legend(loc="lower right", fontsize=26)
+
+# Mean samples plot.
+plt.subplot(1, 3, 2)
+sns.lineplot(data=mean_samples_all, x="Budget", y="Mean Samples", hue="Experiment", marker="o", errorbar="sd")
+plt.xlabel("Average budget per prompt")
+plt.xlim(0, budgets.max())
+plt.ylabel("Average # of generations")
+
+plt.tight_layout()
+# Set the resolution of the plot.
+plt.gcf().set_dpi(300)
+plt.legend().remove()
+plt.show()
+plt.savefig("figures/coverage_budget_resplit.png", dpi=300, bbox_inches="tight")
+
+# %%
+
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Parameters for experiments
+budgets = np.linspace(10, 10000, 10)
+experiments = [
+    ("Naive",     0,     False, True),
+    ("Basic",     0,     False, False),
+    ("Trimmed",   0.01,  False, False),
+    ("Optimized", 0.01,  True,  False),
+]
+test_target_taus = np.array([0.05, 0.15, 0.2])
+
+# Run experiments and collect results
+all_results = {}
+for target_tau in test_target_taus:
+    print(f"Running experiments for target τ = {target_tau}")
+    results = {}
+    target_taus = np.array([target_tau])
+    for label, min_ss, share_budg, naive in experiments:
+        cov_df, lpb_df, mean_samples_df = vary_budget_per_sample(
+            budgets,
+            p_cal,
+            p_test,
+            prop_pred_cal,
+            prop_pred,
+            n_samples_cal,
+            t_tilde_cal,
+            n_conformalizations=20,
+            min_sample_size=min_ss,
+            share_budget=share_budg,
+            naive=naive,
+        )
+        results[label] = (cov_df, lpb_df, mean_samples_df)
+    all_results[target_tau] = results
+
+# %%
+
+# Plotting code using the precomputed results
+sns.set(
+    style="whitegrid", context="notebook", font_scale=3.0,
+    rc={
+      "lines.linewidth": 5,
+      "lines.markersize": 15
+    }
+)
+
+fig, axes = plt.subplots(
+    nrows=2,
+    ncols=len(test_target_taus),
+    figsize=(30, 8),
+    sharex=True
+)
+
+for i, target_tau in enumerate(test_target_taus):
+    results = all_results[target_tau]
+
+    # Melt results for seaborn
+    cov_list = []
+    lpb_list = []
+    for label, (cov_df, lpb_df, _) in results.items():
+        tmp_cov = cov_df.reset_index().rename(columns={"index": "Budget"})
+        tmp_cov = tmp_cov.melt(id_vars="Budget", var_name="Iteration", value_name="Coverage")
+        tmp_cov["Experiment"] = label
+        cov_list.append(tmp_cov)
+
+        tmp_lpb = lpb_df.reset_index().rename(columns={"index": "Budget"})
+        tmp_lpb = tmp_lpb.melt(id_vars="Budget", var_name="Iteration", value_name="LPB")
+        tmp_lpb["Experiment"] = label
+        lpb_list.append(tmp_lpb)
+
+    coverage_all = pd.concat(cov_list, ignore_index=True)
+    lpb_all = pd.concat(lpb_list, ignore_index=True)
+
+    # Coverage plot
+    ax_cov = axes[0, i]
+    sns.lineplot(
+        data=coverage_all,
+        x="Budget", y="Coverage",
+        hue="Experiment", marker="o",
+        errorbar="sd", ax=ax_cov
+    )
+    ax_cov.hlines(1 - target_tau, budgets.min(), budgets.max(),
+                  label="Target coverage (1 - τ)", linestyle="--", color="gray")
+    uncal = coverage(q_prop, p_vals=p_test).mean()
+    ax_cov.hlines(uncal, budgets.min(), budgets.max(),
+                  label="Uncalibrated", color="black")
+    ax_cov.set_xlim(0, budgets.max())
+    ax_cov.set_xlabel("Average budget per prompt")
+    if i == 0:
+        ax_cov.set_ylabel("Coverage")
+    else:
+        ax_cov.set_ylabel('')
+    ax_cov.set_title(f"Target coverage = {1 - target_tau}")
+    ax_cov.get_legend().remove()
+
+    # LPB plot
+    ax_lpb = axes[1, i]
+    ax_lpb.set_yscale("log")
+    sns.lineplot(
+        data=lpb_all,
+        x="Budget", y="LPB",
+        hue="Experiment", marker="o",
+        errorbar="sd", ax=ax_lpb
+    )
+    uncal_lpb = quantile_estimators(prop_pred, [target_tau])[0].mean()
+    ax_lpb.hlines(uncal_lpb, budgets.min(), budgets.max(),
+                   label="Uncalibrated", color="black")
+    ax_lpb.set_xlim(0, budgets.max())
+    ax_lpb.set_xlabel("Average budget per prompt")
+    if i == 0:
+        ax_lpb.set_ylabel("Average LPB")
+    else:
+        ax_lpb.set_ylabel('')
+    ax_lpb.get_legend().remove()
+
+# Single legend on the right
+handles, labels = axes[1, -1].get_legend_handles_labels()
+fig.legend(
+    handles, labels,
+    loc="center right",
+    bbox_to_anchor=(1.1, 0.5),
+    ncol=1,
+    frameon=False,
+    fontsize=20
+)
+
+plt.subplots_adjust(right=0.85)
+fig.tight_layout()
+
+# Save and show
+fig.savefig("figures/coverage_budget_multiple_taus_with_legend.png", dpi=300, bbox_inches="tight")
 plt.show()
 # %%

@@ -35,7 +35,7 @@ CAL_PROMPTS_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
 TEST_PROMPTS_PATH = "data/test_prompt_only.pkl"
 TEST_SURV_TIME_PATH = "data/test_surv_times.npy"
 
-MODEL_PATH = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_1/checkpoints/epoch=7-step=792.ckpt"
+MODEL_PATH = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_3/checkpoints/epoch=0-step=99.ckpt"
 
 # Create the parameter dictionary for the rating backend.
 RATER_PARAMS = {
@@ -64,14 +64,15 @@ BATCH_SIZE = 1300
 
 # name, min_sample_size, share_budget, naive
 EXPERIMENTS = [
-    # ("Fixed Budgeting", None, False, True),
+    ("Fixed Budgeting", None, False, True),
     # ("Adaptive Budgeting", None, False, False),
     # ("Capped Adaptive Budgeting", 0.5, False, False),
     ("Global Budgeting", 0.5, True, False),
 ]
 
 NUM_RUNS = 5
-BUDGET_RANGE = [10, 25, 50, 100, 200, 300, 600]
+# BUDGET_RANGE = [10, 25, 50, 100, 200, 300, 600]
+BUDGET_RANGE = [1200]
 
 SAVE_PATH = "results.csv"
 
@@ -294,7 +295,8 @@ def run_experiments():
                 test_mean_covered_lpb = np.mean(tau_hat_pred[test_t_tilde >= tau_hat_pred])
 
                 # compute miscoverage upper-bound on test set
-                test_miscoverage = np.mean(test_t_tilde < tau_hat_pred)
+                test_miscoverage_lowerbound = np.mean(test_t_tilde < np.clip(tau_hat_pred, min=1, max=test_t_tilde.max()))
+                test_miscoverage_upperbound = np.mean(test_t_tilde < tau_hat_pred)
 
                 # add results to dataframe
                 result_dict = {
@@ -310,10 +312,17 @@ def run_experiments():
                     "cal_mean_generated_samples": cal_mean_generated_samples,
                     "cal_mean_c_value": cal_mean_c_value,
                     "cal_miscoverage": cal_miscoverage,
-                    "test_miscoverage": test_miscoverage,
+                    "test_miscoverage_lowerbound": test_miscoverage_lowerbound,
+                    "test_miscoverage_upperbound": test_miscoverage_upperbound,
                     "test_mean_lpb": test_mean_lpb,
                     "test_mean_covered_lpb": test_mean_covered_lpb
                 }
+
+                if test_miscoverage_lowerbound == test_miscoverage_upperbound:
+                    result_dict["test_miscoverage"] = test_miscoverage_lowerbound
+                else:
+                    result_dict["test_miscoverage_lowerbound"] = test_miscoverage_lowerbound
+                    result_dict["test_miscoverage_upperbound"] = test_miscoverage_upperbound
 
                 print_result(result_dict)
 
