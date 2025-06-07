@@ -1,0 +1,23 @@
+[project]
+name = "llm-survival"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate>=1.7.0",
+    "detoxify>=0.5.2",
+    "google-api-python-client>=2.171.0",
+    "huggingface-hub>=0.32.4",
+    "jupyter>=1.1.1",
+    "lightning>=2.5.1.post0",
+    "matplotlib>=3.10.3",
+    "nltk>=3.9.1",
+    "numpy>=2.2.6",
+    "pandas>=2.3.0",
+    "scikit-learn>=1.7.0",
+    "seaborn>=0.13.2",
+    "tqdm>=4.67.1",
+    "transformers>=4.52.4",
+    "vllm>=0.9.0.1",
+]
