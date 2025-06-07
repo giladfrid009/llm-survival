@@ -170,11 +170,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model_name", default=config.default_model_name, help="Model name to use for generation")
     parser.add_argument("--hf_key_path", default=config.hf_key_path, help="Path to HuggingFace API key")
     parser.add_argument("--max_input_tokens", type=int, default=config.default_max_input_tokens, help="Maximum number of prompt tokens")
-    parser.add_argument("--max_output_tokens", type=int, default=config.default_max_output_tokens, help="Maximum number of tokens to generate")
+    parser.add_argument(
+        "--max_output_tokens", type=int, default=config.default_max_output_tokens, help="Maximum number of tokens to generate"
+    )
     parser.add_argument("--batch_size", type=int, default=config.default_batch_size, help="Batch size for generation")
     parser.add_argument("--max_attempts", type=int, default=config.default_max_attempts, help="Maximum generations per prompt")
     parser.add_argument("--seed", type=int, default=42)
-    return parser.parse_args()
+    
+    # print all args
+    parsed = parser.parse_args()
+    print("Command line arguments:")
+    for arg, value in vars(parsed).items():
+        print(f"  {arg}: {value}")
+    return parsed
 
 
 def main() -> None:
@@ -196,6 +204,7 @@ def main() -> None:
     )
 
     import pickle
+
     with open(args.output, "wb") as f:
         pickle.dump(results, f)
 

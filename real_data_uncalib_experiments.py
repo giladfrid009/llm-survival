@@ -17,21 +17,20 @@ from src import utils
 def parse_args() -> argparse.Namespace:
     """Arguments for evaluating the uncalibrated baseline."""
     parser = argparse.ArgumentParser(description="Run uncalibrated real data experiments")
-    parser.add_argument("--test_prompts_path", default=config.default_test_prompts_path,
-                        help="Pickle containing test prompts")
-    parser.add_argument("--test_surv_time_path", default=config.default_test_surv_time_path,
-                        help="Numpy file with survival times")
-    parser.add_argument("--model_path", default=config.default_model_path,
-                        help="Path to trained toxicity model")
-    parser.add_argument("--batch_size", type=int, default=config.default_batch_size,
-                        help="Batch size for predictions")
-    parser.add_argument("--target_tau", type=float, default=0.1,
-                        help="Target miscoverage level")
-    parser.add_argument("--output", default=config.default_uncalib_results_path,
-                        help="CSV file to write results")
-    parser.add_argument("--hf_key_path", default=config.hf_key_path,
-                        help="Path to HuggingFace API key")
-    return parser.parse_args()
+    parser.add_argument("--test_prompts_path", default=config.default_test_prompts_path, help="Pickle containing test prompts")
+    parser.add_argument("--test_surv_time_path", default=config.default_test_surv_time_path, help="Numpy file with survival times")
+    parser.add_argument("--model_path", default=config.default_model_path, help="Path to trained toxicity model")
+    parser.add_argument("--batch_size", type=int, default=config.default_batch_size, help="Batch size for predictions")
+    parser.add_argument("--target_tau", type=float, default=0.1, help="Target miscoverage level")
+    parser.add_argument("--output", default=config.default_uncalib_results_path, help="CSV file to write results")
+    parser.add_argument("--hf_key_path", default=config.hf_key_path, help="Path to HuggingFace API key")
+    
+    # print all args
+    parsed = parser.parse_args()
+    print("Command line arguments:")
+    for arg, value in vars(parsed).items():
+        print(f"  {arg}: {value}")
+    return parsed
 
 
 def main() -> None:

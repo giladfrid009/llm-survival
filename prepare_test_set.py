@@ -79,13 +79,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output_full", default="data/test_full.pkl", help="Path for full dataset pickle")
     parser.add_argument("--output_full_light", default="data/test_full_light.pkl", help="Path for light-weight dataset pickle")
-    parser.add_argument(
-        "--output_prompt_only", default=config.default_test_prompts_path, help="Path for prompt-only pickle"
-    )
-    parser.add_argument(
-        "--output_surv_times", default=config.default_test_surv_time_path, help="Path for numpy survival-time array"
-    )
-    return parser.parse_args()
+    parser.add_argument("--output_prompt_only", default=config.default_test_prompts_path, help="Path for prompt-only pickle")
+    parser.add_argument("--output_surv_times", default=config.default_test_surv_time_path, help="Path for numpy survival-time array")
+    
+    
+    # print all args
+    parsed = parser.parse_args()
+    print("Command line arguments:")
+    for arg, value in vars(parsed).items():
+        print(f"  {arg}: {value}")
+    return parsed
 
 
 def load_fragment(path: str) -> List[SurvivalResult]:
@@ -102,9 +105,7 @@ def load_fragments(paths: List[str]) -> List[List[SurvivalResult]]:
     for frag in tqdm(paths, desc="Loading fragments"):
         data = load_fragment(frag)
         if frags and len(data) != len(frags[0]):
-            raise ValueError(
-                f"Fragment '{frag}' length {len(data)} does not match others ({len(frags[0])})"
-            )
+            raise ValueError(f"Fragment '{frag}' length {len(data)} does not match others ({len(frags[0])})")
         frags.append(data)
     return frags
 

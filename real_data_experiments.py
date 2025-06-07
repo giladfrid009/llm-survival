@@ -51,41 +51,34 @@ TEXT_PREP_FUNC = "sentence_completion"
 def parse_args() -> argparse.Namespace:
     """CLI arguments for the real-data experiments."""
     parser = argparse.ArgumentParser(description="Run real data experiments")
-    parser.add_argument("--cal_prompts_path", default=config.default_cal_prompts_path,
-                        help="Pickle file of calibration prompts")
-    parser.add_argument("--test_prompts_path", default=config.default_test_prompts_path,
-                        help="Pickle file of test prompts")
-    parser.add_argument("--test_surv_time_path", default=config.default_test_surv_time_path,
-                        help="Numpy file of survival times")
-    parser.add_argument("--model_path", default=config.default_model_path,
-                        help="Path to trained toxicity model checkpoint")
-    parser.add_argument("--save_path", default=config.default_exp_results_path,
-                        help="CSV file to append experiment results")
-    parser.add_argument("--batch_size", type=int, default=1300,
-                        help="Batch size for model predictions")
-    parser.add_argument("--budgets", type=int, nargs="*", default=[1200],
-                        help="Budgets (samples per prompt) to evaluate")
-    parser.add_argument("--num_runs", type=int, default=5,
-                        help="Number of independent experiment runs")
-    parser.add_argument("--target_tau", type=float, default=0.1,
-                        help="Target miscoverage level")
-    parser.add_argument("--min_tau_exp", type=float, default=-3,
-                        help="log10 of smallest tau in search grid")
-    parser.add_argument("--max_tau_exp", type=float, default=-0.25,
-                        help="log10 of largest tau in search grid")
-    parser.add_argument("--num_taus", type=int, default=1000,
-                        help="Number of tau values in the grid")
-    parser.add_argument("--hf_key_path", default=config.hf_key_path,
-                        help="Path to HF API key")
-    parser.add_argument("--model_name", default=config.default_model_name,
-                        help="Name of the generator model")
-    parser.add_argument("--max_input_tokens", type=int, default=config.default_max_input_tokens,
-                        help="Maximum prompt tokens for generation")
-    parser.add_argument("--max_output_tokens", type=int, default=config.default_max_output_tokens,
-                        help="Maximum tokens to generate")
-    parser.add_argument("--experiments", default="all",
-                        help="Comma-separated list of experiment types to run: fixed, adaptive, capped, global, or 'all'")
-    return parser.parse_args()
+    parser.add_argument("--cal_prompts_path", default=config.default_cal_prompts_path, help="Pickle file of calibration prompts")
+    parser.add_argument("--test_prompts_path", default=config.default_test_prompts_path, help="Pickle file of test prompts")
+    parser.add_argument("--test_surv_time_path", default=config.default_test_surv_time_path, help="Numpy file of survival times")
+    parser.add_argument("--model_path", default=config.default_model_path, help="Path to trained toxicity model checkpoint")
+    parser.add_argument("--save_path", default=config.default_exp_results_path, help="CSV file to append experiment results")
+    parser.add_argument("--batch_size", type=int, default=1300, help="Batch size for model predictions")
+    parser.add_argument("--budgets", type=int, nargs="*", default=[1200], help="Budgets (samples per prompt) to evaluate")
+    parser.add_argument("--num_runs", type=int, default=5, help="Number of independent experiment runs")
+    parser.add_argument("--target_tau", type=float, default=0.1, help="Target miscoverage level")
+    parser.add_argument("--min_tau_exp", type=float, default=-3, help="log10 of smallest tau in search grid")
+    parser.add_argument("--max_tau_exp", type=float, default=-0.25, help="log10 of largest tau in search grid")
+    parser.add_argument("--num_taus", type=int, default=1000, help="Number of tau values in the grid")
+    parser.add_argument("--hf_key_path", default=config.hf_key_path, help="Path to HF API key")
+    parser.add_argument("--model_name", default=config.default_model_name, help="Name of the generator model")
+    parser.add_argument(
+        "--max_input_tokens", type=int, default=config.default_max_input_tokens, help="Maximum prompt tokens for generation"
+    )
+    parser.add_argument("--max_output_tokens", type=int, default=config.default_max_output_tokens, help="Maximum tokens to generate")
+    parser.add_argument(
+        "--experiments", default="all", help="Comma-separated list of experiment types to run: fixed, adaptive, capped, global, or 'all'"
+    )
+    
+    # print all args
+    parsed = parser.parse_args()
+    print("Command line arguments:")
+    for arg, value in vars(parsed).items():
+        print(f"  {arg}: {value}")
+    return parsed
 
 
 #############################################################################################################
@@ -197,7 +190,7 @@ def run_experiments(args: argparse.Namespace) -> None:
 
     print_config(args)
 
-    sel = [s.strip().lower() for s in args.experiments.split(',') if s.strip()]
+    sel = [s.strip().lower() for s in args.experiments.split(",") if s.strip()]
     if "all" in sel:
         experiments = list(EXPERIMENT_OPTIONS.values())
     else:
@@ -315,7 +308,7 @@ def run_experiments(args: argparse.Namespace) -> None:
                 test_quantile_est = np.vstack([p["tau"].T for p in test_pred_raw]).clip(min=1, max=max_est)
                 tau_hat_pred = test_quantile_est[:, tau_hat_idx].flatten().astype(np.int64)
                 test_mean_lpb = tau_hat_pred.mean().item()
-                
+
                 # compute LPB only for predictions which are correct
                 test_mean_covered_lpb = np.mean(tau_hat_pred[test_t_tilde >= tau_hat_pred])
 
@@ -340,7 +333,7 @@ def run_experiments(args: argparse.Namespace) -> None:
                     "test_miscoverage_lowerbound": test_miscoverage_lowerbound,
                     "test_miscoverage_upperbound": test_miscoverage_upperbound,
                     "test_mean_lpb": test_mean_lpb,
-                    "test_mean_covered_lpb": test_mean_covered_lpb
+                    "test_mean_covered_lpb": test_mean_covered_lpb,
                 }
 
                 if test_miscoverage_lowerbound == test_miscoverage_upperbound:

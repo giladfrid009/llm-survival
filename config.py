@@ -29,9 +29,7 @@ default_cal_prompts_path = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"  # cal
 default_test_split_path = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl"  # base test split
 default_test_prompts_path = "data/test_prompt_only.pkl"  # extracted test prompts
 default_test_surv_time_path = "data/test_surv_times.npy"  # numpy array of survival times
-default_model_path = (
-    "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_3/checkpoints/epoch=0-step=99.ckpt"
-)
+default_model_path = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_3/checkpoints/epoch=0-step=99.ckpt"
 
 # Locations of experiment results
 # ``real_data_experiments.py`` appends to ``default_exp_results_path`` while

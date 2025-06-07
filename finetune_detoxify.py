@@ -13,7 +13,9 @@ from src.failure_model import ToxicClassifier
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 import torch._dynamo
+
 torch._dynamo.config.suppress_errors = True
+
 
 def cli_main():
     pl.seed_everything(1234)
@@ -49,7 +51,12 @@ def cli_main():
     )
     parser.add_argument("-e", "--n_epochs", default=2, type=int, help="if given, override the num")
 
+    # print all args
     args = parser.parse_args()
+    print("Command line arguments:")
+    for arg, value in vars(args).items():
+        print(f"  {arg}: {value}")
+
     config = json.load(open(args.config))
 
     if args.device is not None:
@@ -77,7 +84,7 @@ def cli_main():
         num_workers=args.num_workers,
         shuffle=False,
     )
-    
+
     # model
     model = ToxicClassifier(config)
     model = model.train()
@@ -103,7 +110,7 @@ def cli_main():
         default_root_dir="saved/" + config["name"],
         deterministic=True,
     )
-    
+
     trainer.fit(
         model=model,
         train_dataloaders=data_loader,

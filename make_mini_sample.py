@@ -1,3 +1,5 @@
+# NOTE: WORKS.
+
 """Generate additional survival data for the evaluation test set.
 
 This script repeatedly runs the survival generation pipeline over the test
@@ -39,44 +41,40 @@ def parse_args() -> argparse.Namespace:
     """Command line arguments for mini dataset generation."""
     parser = argparse.ArgumentParser(description="Generate survival mini datasets")
     parser.add_argument(
-        "--prompts_path",
+        "--prompts_path", # NOTE: works!
         default=None,
-        help=(
-            "Pickle file containing prompts to extend. If omitted, prompts are"
-            " read from --base_dataset."
-        ),
+        help=("Pickle file containing prompts to extend. If omitted, prompts are read from --base_dataset."),
     )
     parser.add_argument(
-        "--base_dataset",
+        "--base_dataset", # NOTE: now works!
         default=config.default_test_split_path,
         help=(
-            "Pickle with base test data to read prompts from when --prompts_path"
+            "Pickle with base test dataset to read prompts from when --prompts_path"
             " is not provided. Use 'none' to disable loading a base dataset."
         ),
     )
-    parser.add_argument("--batch_size", type=int, default=config.default_batch_size,
-                        help="Batch size for generation")
-    parser.add_argument("--max_attempts", type=int, default=100,
-                        help="Number of generations attempted per prompt")
-    parser.add_argument("--total_datasets", type=int, default=100,
-                        help="Number of mini-sets to create")
-    parser.add_argument("--mini_sample_folder", default=DEFAULT_FOLDER,
-                        help="Directory to store the generated fragments")
-    parser.add_argument("--mini_sample_file_name", default=DEFAULT_FILE_NAME,
-                        help="Base name for each fragment (index and .pkl added)")
+    parser.add_argument("--batch_size", type=int, default=config.default_batch_size, help="Batch size for generation")
+    parser.add_argument("--max_attempts", type=int, default=100, help="Number of generations attempted per prompt")
+    parser.add_argument("--total_datasets", type=int, default=100, help="Number of mini-sets to create")
+    parser.add_argument("--mini_sample_folder", default=DEFAULT_FOLDER, help="Directory to store the generated fragments")
+    parser.add_argument("--mini_sample_file_name", default=DEFAULT_FILE_NAME, help="Base name for each fragment (index and .pkl added)")
     parser.add_argument(
         "--start_idx",
         type=int,
         default=DEFAULT_START_IDX,
         help="Index to start numbering saved fragments from",
     )
-    parser.add_argument("--model_name", default=config.default_model_name,
-                        help="Model name for generation")
-    parser.add_argument("--hf_key_path", default=config.hf_key_path,
-                        help="Path to HuggingFace API key")
+    parser.add_argument("--model_name", default=config.default_model_name, help="Model name for generation")
+    parser.add_argument("--hf_key_path", default=config.hf_key_path, help="Path to HuggingFace API key")
     parser.add_argument("--max_input_tokens", type=int, default=config.default_max_input_tokens)
     parser.add_argument("--max_output_tokens", type=int, default=config.default_max_output_tokens)
-    return parser.parse_args()
+    
+    # print all args
+    parsed = parser.parse_args()
+    print("Command line arguments:")
+    for arg, value in vars(parsed).items():
+        print(f"  {arg}: {value}")
+    return parsed
 
 
 ###########
@@ -135,13 +133,11 @@ def create_datasets(args: argparse.Namespace):
             raise ValueError("Either --prompts_path or --base_dataset must be supplied")
         with open(args.base_dataset, "rb") as f:
             base_data = pickle.load(f)
-        prompts = [res.prompt for res in base_data]
+        prompts = [res if isinstance(res, str) else res[0] for res in base_data]
         print(f"Loaded {len(prompts)} prompts from {args.base_dataset}")
 
     # validate the save path
-    output_template = os.path.join(
-        args.mini_sample_folder, f"{args.mini_sample_file_name}_{{}}.pkl"
-    )
+    output_template = os.path.join(args.mini_sample_folder, f"{args.mini_sample_file_name}_{{}}.pkl")
     start = validate_save_path(output_template, args.start_idx)
 
     # run

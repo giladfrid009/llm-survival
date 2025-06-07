@@ -10,14 +10,19 @@ import config
 def parse_args() -> argparse.Namespace:
     """Return CLI arguments."""
     parser = argparse.ArgumentParser(description="Generate real data plots")
-    parser.add_argument("--results", default=config.default_exp_results_path,
-                        help="CSV file produced by real_data_experiments.py")
-    parser.add_argument("--results_uncalib", default=config.default_uncalib_results_path,
-                        help="CSV file from real_data_uncalib_experiments.py")
-    parser.add_argument("--output", default="figures/real_data_results.png",
-                        help="Path for the output plot image")
-    return parser.parse_args()
-
+    parser.add_argument("--results", default=config.default_exp_results_path, help="CSV file produced by real_data_experiments.py")
+    parser.add_argument(
+        "--results_uncalib", default=config.default_uncalib_results_path, help="CSV file from real_data_uncalib_experiments.py"
+    )
+    parser.add_argument("--output", default="figures/real_data_results.png", help="Path for the output plot image")
+    
+    # print all args
+    parsed = parser.parse_args()
+    print("Command line arguments:")
+    for arg, value in vars(parsed).items():
+        print(f"  {arg}: {value}")
+    return parsed
+    
 
 def main() -> None:
     """Read CSVs and produce ``args.output``."""
@@ -53,7 +58,13 @@ def main() -> None:
     plt.ylabel("Average LPB")
     palette = {"Naive": colors[0], "Optimized": colors[3]}
     sns.lineplot(data=results, x="exp_budget", y="test_mean_lpb", marker="o", hue="exp_name", palette=palette)
-    plt.hlines(y=results_uncalib["test_mean_lpb"].mean(), xmin=results["exp_budget"].min(), xmax=results["exp_budget"].max(), color="black", label="Uncalibrated")
+    plt.hlines(
+        y=results_uncalib["test_mean_lpb"].mean(),
+        xmin=results["exp_budget"].min(),
+        xmax=results["exp_budget"].max(),
+        color="black",
+        label="Uncalibrated",
+    )
     plt.legend()
 
     plt.gcf().set_dpi(300)

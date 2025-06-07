@@ -1,3 +1,5 @@
+# NOTE: WORKS.
+
 # %%
 """
 Imports and Global Settings
@@ -20,6 +22,11 @@ import argparse
 parser = argparse.ArgumentParser(description="Synthetic experiment")
 parser.add_argument("--n_x", type=int, default=100000)
 args = parser.parse_args()
+
+# print args
+print("Command line arguments:")
+for arg, value in vars(args).items():
+    print(f"  {arg}: {value}")
 
 # Import custom loss functions (assumed to be correctly defined in src/loss.py)
 from src.loss import survival_loss, prop_loss
@@ -118,6 +125,7 @@ def geom_cdf_stable(k, p):
     # expm1(...) is exp(...) - 1 computed accurately even if the exponent is near 0
     # Is still instable for large k, so clip the return value.
     return -np.expm1(k * np.log1p(-p))
+
 
 """
 Neural Network Model and Training Function Definitions
@@ -483,6 +491,7 @@ def conformalize(
 
     return a_hats, max_estimator, C_probs, mean_n_samples
 
+
 """
 Calibration and Conformalization
 ----------------------------------
@@ -501,6 +510,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import tqdm
 import seaborn as sns
+
 
 def vary_budget_per_sample(
     budgets,
@@ -553,10 +563,10 @@ def vary_budget_per_sample(
         p_cal = p_cal[sort_idx]
         prop_pred_cal = prop_pred_cal[sort_idx]
         # Split the merged set back into calibration and test sets.
-        p_test = p_cal[:len(p_test)]
-        prop_pred_test = prop_pred_cal[:len(p_test)]
-        p_cal = p_cal[len(p_test):]
-        prop_pred_cal = prop_pred_cal[len(p_test):]
+        p_test = p_cal[: len(p_test)]
+        prop_pred_test = prop_pred_cal[: len(p_test)]
+        p_cal = p_cal[len(p_test) :]
+        prop_pred_cal = prop_pred_cal[len(p_test) :]
 
     # Loop over each budget value.
     for budget in budgets:
@@ -664,11 +674,10 @@ mean_samples_all = pd.concat(mean_samples_list, ignore_index=True)
 # --- Plotting with Seaborn ---
 
 sns.set(
-    style="whitegrid", context="notebook", font_scale=2.5,
-    rc={
-      "lines.linewidth": 5,    # default line width
-      "lines.markersize": 15   # default marker size
-    }
+    style="whitegrid",
+    context="notebook",
+    font_scale=2.5,
+    rc={"lines.linewidth": 5, "lines.markersize": 15},  # default line width  # default marker size
 )
 
 # Set the seaborn style.
@@ -767,10 +776,10 @@ def vary_min_sample_size(
         p_cal = p_cal[sort_idx]
         prop_pred_cal = prop_pred_cal[sort_idx]
         # Split the merged set back into calibration and test sets.
-        p_test = p_cal[:len(p_test)]
-        prop_pred_test = prop_pred_cal[:len(p_test)]
-        p_cal = p_cal[len(p_test):]
-        prop_pred_cal = prop_pred_cal[len(p_test):]
+        p_test = p_cal[: len(p_test)]
+        prop_pred_test = prop_pred_cal[: len(p_test)]
+        p_cal = p_cal[len(p_test) :]
+        prop_pred_cal = prop_pred_cal[len(p_test) :]
 
     # Loop over each min_sample_size value.
     for min_sample_size in min_sample_sizes:
@@ -854,11 +863,10 @@ lpb_all_min_sample = pd.concat(lpb_list_min_sample, ignore_index=True)
 # --- Plotting with Seaborn ---
 # Set the seaborn style.
 sns.set(
-    style="whitegrid", context="notebook", font_scale=2.5,
-    rc={
-      "lines.linewidth": 5,    # default line width
-      "lines.markersize": 15   # default marker size
-    }
+    style="whitegrid",
+    context="notebook",
+    font_scale=2.5,
+    rc={"lines.linewidth": 5, "lines.markersize": 15},  # default line width  # default marker size
 )
 # Set the resolution of the plot.
 plt.gcf().set_dpi(300)
@@ -871,23 +879,19 @@ lpb_all_min_sample["Max Weight"] = 1.0 / lpb_all_min_sample["Min Sample Size"]
 plt.subplot(1, 2, 1)
 # Set the color of the optimized method to red and the trimmed method to green, both in the plot and the legend.
 colors = sns.color_palette("tab10", 5)
-palette = {
-    "Optimized": colors[3],
-    "Trimmed":   colors[2]
-}
+palette = {"Optimized": colors[3], "Trimmed": colors[2]}
 
 # draw the lineplot
-ax = sns.lineplot(
-    data=coverage_all_min_sample,
-    x="Max Weight", 
-    y="Coverage",
-    hue="Experiment",
-    palette=palette,
-    marker="o",
-    errorbar="sd"
-)
+ax = sns.lineplot(data=coverage_all_min_sample, x="Max Weight", y="Coverage", hue="Experiment", palette=palette, marker="o", errorbar="sd")
 # Plot the 90% coverage line.
-plt.hlines(0.9, coverage_all_min_sample["Max Weight"].min(), coverage_all_min_sample["Max Weight"].max(), label="90% coverage", color="gray", linestyle="--")
+plt.hlines(
+    0.9,
+    coverage_all_min_sample["Max Weight"].min(),
+    coverage_all_min_sample["Max Weight"].max(),
+    label="90% coverage",
+    color="gray",
+    linestyle="--",
+)
 # Write the title in Latex, Coverage vs \pi_{\text{min}}
 plt.xlabel(r"$w_{\text{max}}$")
 plt.xlim(coverage_all_min_sample["Max Weight"].min(), coverage_all_min_sample["Max Weight"].max())
@@ -981,11 +985,10 @@ mean_samples_all = pd.concat(mean_samples_list, ignore_index=True)
 # --- Plotting with Seaborn ---
 
 sns.set(
-    style="whitegrid", context="notebook", font_scale=2.5,
-    rc={
-      "lines.linewidth": 5,    # default line width
-      "lines.markersize": 15   # default marker size
-    }
+    style="whitegrid",
+    context="notebook",
+    font_scale=2.5,
+    rc={"lines.linewidth": 5, "lines.markersize": 15},  # default line width  # default marker size
 )
 
 # Set the seaborn style.
@@ -1041,10 +1044,10 @@ import matplotlib.pyplot as plt
 # Parameters for experiments
 budgets = np.linspace(10, 10000, 10)
 experiments = [
-    ("Naive",     0,     False, True),
-    ("Basic",     0,     False, False),
-    ("Trimmed",   0.01,  False, False),
-    ("Optimized", 0.01,  True,  False),
+    ("Naive", 0, False, True),
+    ("Basic", 0, False, False),
+    ("Trimmed", 0.01, False, False),
+    ("Optimized", 0.01, True, False),
 ]
 test_target_taus = np.array([0.05, 0.15, 0.2])
 
@@ -1074,20 +1077,9 @@ for target_tau in test_target_taus:
 # %%
 
 # Plotting code using the precomputed results
-sns.set(
-    style="whitegrid", context="notebook", font_scale=3.0,
-    rc={
-      "lines.linewidth": 5,
-      "lines.markersize": 15
-    }
-)
+sns.set(style="whitegrid", context="notebook", font_scale=3.0, rc={"lines.linewidth": 5, "lines.markersize": 15})
 
-fig, axes = plt.subplots(
-    nrows=2,
-    ncols=len(test_target_taus),
-    figsize=(30, 14),
-    sharex=True
-)
+fig, axes = plt.subplots(nrows=2, ncols=len(test_target_taus), figsize=(30, 14), sharex=True)
 
 for i, target_tau in enumerate(test_target_taus):
     results = all_results[target_tau]
@@ -1111,56 +1103,36 @@ for i, target_tau in enumerate(test_target_taus):
 
     # Coverage plot
     ax_cov = axes[0, i]
-    sns.lineplot(
-        data=coverage_all,
-        x="Budget", y="Coverage",
-        hue="Experiment", marker="o",
-        errorbar="sd", ax=ax_cov
-    )
-    ax_cov.hlines(1 - target_tau, budgets.min(), budgets.max(),
-                  label="Target coverage (1 - τ)", linestyle="--", color="gray")
+    sns.lineplot(data=coverage_all, x="Budget", y="Coverage", hue="Experiment", marker="o", errorbar="sd", ax=ax_cov)
+    ax_cov.hlines(1 - target_tau, budgets.min(), budgets.max(), label="Target coverage (1 - τ)", linestyle="--", color="gray")
     uncal = coverage(q_prop, p_vals=p_test).mean()
-    ax_cov.hlines(uncal, budgets.min(), budgets.max(),
-                  label="Uncalibrated", color="black")
+    ax_cov.hlines(uncal, budgets.min(), budgets.max(), label="Uncalibrated", color="black")
     ax_cov.set_xlim(0, budgets.max())
     ax_cov.set_xlabel("Average budget per prompt")
     if i == 0:
         ax_cov.set_ylabel("Coverage")
     else:
-        ax_cov.set_ylabel('')
+        ax_cov.set_ylabel("")
     ax_cov.set_title(f"Target coverage = {1 - target_tau}")
     ax_cov.get_legend().remove()
 
     # LPB plot
     ax_lpb = axes[1, i]
     ax_lpb.set_yscale("log")
-    sns.lineplot(
-        data=lpb_all,
-        x="Budget", y="LPB",
-        hue="Experiment", marker="o",
-        errorbar="sd", ax=ax_lpb
-    )
+    sns.lineplot(data=lpb_all, x="Budget", y="LPB", hue="Experiment", marker="o", errorbar="sd", ax=ax_lpb)
     uncal_lpb = quantile_estimators(prop_pred, [target_tau])[0].mean()
-    ax_lpb.hlines(uncal_lpb, budgets.min(), budgets.max(),
-                   label="Uncalibrated", color="black")
+    ax_lpb.hlines(uncal_lpb, budgets.min(), budgets.max(), label="Uncalibrated", color="black")
     ax_lpb.set_xlim(0, budgets.max())
     ax_lpb.set_xlabel("Average budget per prompt")
     if i == 0:
         ax_lpb.set_ylabel("Average LPB")
     else:
-        ax_lpb.set_ylabel('')
+        ax_lpb.set_ylabel("")
     ax_lpb.get_legend().remove()
 
 # Single legend on the right
 handles, labels = axes[1, -1].get_legend_handles_labels()
-fig.legend(
-    handles, labels,
-    loc="center right",
-    bbox_to_anchor=(1.13, 0.5),
-    ncol=1,
-    frameon=False,
-    fontsize=30
-)
+fig.legend(handles, labels, loc="center right", bbox_to_anchor=(1.13, 0.5), ncol=1, frameon=False, fontsize=30)
 
 plt.subplots_adjust(right=0.85)
 fig.tight_layout(pad=1.0, h_pad=3.0)
