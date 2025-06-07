@@ -15,6 +15,11 @@ from matplotlib import pyplot as plt
 import tqdm
 import torch.nn.functional as F
 from scipy.stats import geom
+import argparse
+
+parser = argparse.ArgumentParser(description="Synthetic experiment")
+parser.add_argument("--n_x", type=int, default=100000)
+args = parser.parse_args()
 
 # Import custom loss functions (assumed to be correctly defined in src/loss.py)
 from src.loss import survival_loss, prop_loss
@@ -30,7 +35,7 @@ Generate synthetic data and split it into training, calibration, and testing set
 """
 
 # Number of observations
-n_x = 100000
+n_x = args.n_x
 
 # Determine probabilities p:
 # Create two log-spaced arrays and concatenate them
@@ -707,6 +712,9 @@ plt.tight_layout()
 plt.gcf().set_dpi(300)
 plt.legend().remove()
 plt.show()
+# Allow running as script
+if __name__ == "__main__":
+    pass
 plt.savefig("figures/coverage_budget.png", dpi=300, bbox_inches="tight")
 
 

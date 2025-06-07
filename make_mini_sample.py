@@ -1,3 +1,12 @@
+"""Generate additional survival data for the evaluation test set.
+
+This script repeatedly runs the survival generation pipeline over the test
+prompts and stores each run as a separate *mini-set*.  Prompts can be supplied
+directly via ``--prompts_path`` or extracted from ``--base_dataset``.  The
+fragments can later be merged with :mod:`prepare_test_set` to obtain a large
+evaluation set with multiple independent continuations per prompt.
+"""
+
 from src import utils
 from src.rating.base import *
 from src.generation.base import *
@@ -10,6 +19,8 @@ from src.datasets import PromptOnlyDataset
 import os
 import logging
 import torch._dynamo
+import argparse
+import config
 
 torch._dynamo.config.suppress_errors = True
 
@@ -19,32 +30,53 @@ torch._dynamo.config.suppress_errors = True
 ###########
 
 
-PROMPTS_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl"
+DEFAULT_FOLDER = "mini_datasets"
+DEFAULT_FILE_NAME = "mini_set"
+DEFAULT_START_IDX = 0
 
-HF_KEY = utils.api_key_from_file("HF_KEY.txt")
 
-RATER_PARAMS = {
-    "model_type": "original",
-    "amp": True,
-}
-
-GENERATOR_PARAMS = {
-    "model_name": "meta-llama/Llama-3.2-1B",
-    "hub_token": HF_KEY,
-    "max_input_tokens": 40,
-    "max_output_tokens": 30,
-    "torch_dtype": torch.bfloat16,
-}
-
-SUBSET_SIZE = 12000
-BATCH_SIZE = 1500
-MAX_ATTEMPTS = 100
-TOTAL_DATASETS = 100
-RESULTS_FILE = "mini_datasets/mini_set_{}.pkl"  # NOTE: make sure name has place for int formatting
-
-# start index for saving the results file,
-# i.e saving first dataset in RESULTS_FILE.format(START_IDX), second in RESULTS_FILE.format(START_IDX + 1), ...
-START_IDX = 0
+def parse_args() -> argparse.Namespace:
+    """Command line arguments for mini dataset generation."""
+    parser = argparse.ArgumentParser(description="Generate survival mini datasets")
+    parser.add_argument(
+        "--prompts_path",
+        default=None,
+        help=(
+            "Pickle file containing prompts to extend. If omitted, prompts are"
+            " read from --base_dataset."
+        ),
+    )
+    parser.add_argument(
+        "--base_dataset",
+        default=config.default_test_split_path,
+        help=(
+            "Pickle with base test data to read prompts from when --prompts_path"
+            " is not provided. Use 'none' to disable loading a base dataset."
+        ),
+    )
+    parser.add_argument("--batch_size", type=int, default=config.default_batch_size,
+                        help="Batch size for generation")
+    parser.add_argument("--max_attempts", type=int, default=100,
+                        help="Number of generations attempted per prompt")
+    parser.add_argument("--total_datasets", type=int, default=100,
+                        help="Number of mini-sets to create")
+    parser.add_argument("--mini_sample_folder", default=DEFAULT_FOLDER,
+                        help="Directory to store the generated fragments")
+    parser.add_argument("--mini_sample_file_name", default=DEFAULT_FILE_NAME,
+                        help="Base name for each fragment (index and .pkl added)")
+    parser.add_argument(
+        "--start_idx",
+        type=int,
+        default=DEFAULT_START_IDX,
+        help="Index to start numbering saved fragments from",
+    )
+    parser.add_argument("--model_name", default=config.default_model_name,
+                        help="Model name for generation")
+    parser.add_argument("--hf_key_path", default=config.hf_key_path,
+                        help="Path to HuggingFace API key")
+    parser.add_argument("--max_input_tokens", type=int, default=config.default_max_input_tokens)
+    parser.add_argument("--max_output_tokens", type=int, default=config.default_max_output_tokens)
+    return parser.parse_args()
 
 
 ###########
@@ -53,6 +85,7 @@ START_IDX = 0
 
 
 def configure_logging(level=logging.ERROR):
+    """Silence noisy libraries and set a global log level."""
     logging.captureWarnings(True)
     logging.basicConfig(level=level)
     logging.getLogger().setLevel(level)
@@ -70,7 +103,8 @@ def configure_logging(level=logging.ERROR):
     torch._logging.set_logs(all=level)
 
 
-def validate_save_path(save_path):
+def validate_save_path(save_path: str, start_idx: int) -> int:
+    """Ensure the output directory exists and pick the next free index."""
 
     # make save_path absolute if it is not
     if not os.path.isabs(save_path):
@@ -82,35 +116,39 @@ def validate_save_path(save_path):
         os.makedirs(directory)
         print(f"Directory {directory} created.")
 
-    i = START_IDX
+    i = start_idx
     while os.path.exists(save_path.format(i)):
         print(f"Results file {save_path.format(i)} already exists. Incrementing index.")
         i += 1
     return i
 
 
-def create_datasets():
+def create_datasets(args: argparse.Namespace):
+    """Generate ``total_datasets`` fragments of the full prompt set."""
 
-    # Load the prompts
-    prompts = PromptOnlyDataset(PROMPTS_PATH)
-    
-    if SUBSET_SIZE is not None:
-        # choose a random subset of the prompts
-        rng = np.random.default_rng(42)
-        idx = rng.choice(len(prompts), size=SUBSET_SIZE, replace=False)
-        prompts.data = [prompts.data[i] for i in idx]
-    
-    print(f"Loaded {len(prompts)} prompts from {PROMPTS_PATH}")
+    # Load the prompts either directly or from the base dataset
+    if args.prompts_path:
+        prompts = PromptOnlyDataset(args.prompts_path)
+        print(f"Loaded {len(prompts)} prompts from {args.prompts_path}")
+    else:
+        if args.base_dataset is None:
+            raise ValueError("Either --prompts_path or --base_dataset must be supplied")
+        with open(args.base_dataset, "rb") as f:
+            base_data = pickle.load(f)
+        prompts = [res.prompt for res in base_data]
+        print(f"Loaded {len(prompts)} prompts from {args.base_dataset}")
 
     # validate the save path
-    start = validate_save_path(RESULTS_FILE)
-    start = max(start, START_IDX)
+    output_template = os.path.join(
+        args.mini_sample_folder, f"{args.mini_sample_file_name}_{{}}.pkl"
+    )
+    start = validate_save_path(output_template, args.start_idx)
 
     # run
-    for i in range(start, TOTAL_DATASETS):
+    for i in range(start, args.total_datasets):
 
         print("-" * 40)
-        print(f"Running iter ({i + 1} / {TOTAL_DATASETS} )")
+        print(f"Running iter ({i + 1} / {args.total_datasets} )")
         print("-" * 40)
 
         utils.clear_memory()
@@ -118,11 +156,16 @@ def create_datasets():
         survival_results = generate_survival_results_generic(
             prompts=prompts,
             prompt_ids=list(range(len(prompts))),
-            prompt_attempts=[MAX_ATTEMPTS] * len(prompts),
-            generate_params={"batch_size": BATCH_SIZE},
-            generator_params=GENERATOR_PARAMS,
-            rater_params=RATER_PARAMS,
-            max_attempts=MAX_ATTEMPTS,
+            prompt_attempts=[args.max_attempts] * len(prompts),
+            generate_params={"batch_size": args.batch_size},
+            generator_params=config.generator_params(
+                model_name=args.model_name,
+                hf_key=config.get_hf_key(args.hf_key_path),
+                max_input_tokens=args.max_input_tokens,
+                max_output_tokens=args.max_output_tokens,
+            ),
+            rater_params=config.rater_params(),
+            max_attempts=args.max_attempts,
             toxicity_func="no_toxicity",
             text_prep_func="sentence_completion",
             conserve_memory_ratings=False,
@@ -136,24 +179,26 @@ def create_datasets():
         survival_results = [survival_results[i] for i in sorted_indices]
 
         # Save final results to disk
-        with open(RESULTS_FILE.format(i), "wb") as f:
+        with open(output_template.format(i), "wb") as f:
             pickle.dump(survival_results, f)
 
 
-def main():
-    
+def main() -> None:
+    """Entry point for script execution."""
+    args = parse_args()
+
+    if args.base_dataset and args.base_dataset.lower() == "none":
+        args.base_dataset = None
+
     utils.clear_memory()
 
-    # NOTE: open a new terminal session after running this if you encounter HF token issues
-    # in any of the workers or the main process
-    HfFolder.save_token(HF_KEY)
+    HfFolder.save_token(config.get_hf_key(args.hf_key_path))
 
-    # NOTE: to stop pytorch breaking
     torch.multiprocessing.set_start_method("spawn", force=True)
 
     configure_logging(logging.ERROR)
 
-    create_datasets()
+    create_datasets(args)
 
 
 if __name__ == "__main__":

@@ -1,74 +1,75 @@
-from src import utils
-from src.rating.base import *
-from src.generation.base import *
+"""Generate the large multisample dataset used for training and evaluation.
+
+The script loads prompts (by default from the Real Toxicity Prompts dataset),
+generates continuations with an LLM, rates them for toxicity, and stores the
+resulting :class:`~src.survival_runner.SurvivalResult` objects.  The output is
+a pickle file that can later be split into train/val/cal/test sets using
+``data/make_split_ms.py``.
+"""
+
+import argparse
+import pickle
 import torch
 
-import os
-import pickle
+from src import utils
+from src.survival_runner import SurvivalResult, generate_survival_results_generic
+import config
 
-utils.set_seed(42)
-utils.clear_memory()
 
-# %%
-# load data
+def parse_args() -> argparse.Namespace:
+    """CLI arguments for dataset generation."""
+    parser = argparse.ArgumentParser(description="Generate a large survival dataset")
+    parser.add_argument("--prompts_path", default="hf://datasets/allenai/real-toxicity-prompts/prompts.jsonl")
+    parser.add_argument("--output", default="multisample_results.pkl")
+    parser.add_argument("--batch_size", type=int, default=config.default_batch_size,
+                        help="Batch size for generation")
+    parser.add_argument("--max_attempts", type=int, default=5000,
+                        help="Maximum attempts per prompt")
+    parser.add_argument("--model_name", default=config.default_model_name,
+                        help="Model name for generation")
+    parser.add_argument("--hf_key_path", default=config.hf_key_path,
+                        help="Path to HuggingFace API key")
+    parser.add_argument("--max_input_tokens", type=int, default=config.default_max_input_tokens,
+                        help="Maximum prompt tokens")
+    parser.add_argument("--max_output_tokens", type=int, default=config.default_max_output_tokens,
+                        help="Maximum tokens to generate")
+    return parser.parse_args()
 
-import pandas as pd
 
-df = pd.read_json("hf://datasets/allenai/real-toxicity-prompts/prompts.jsonl", lines=True)
+def main() -> None:
+    """Entry point: generate and save the multisample dataset."""
+    args = parse_args()
 
-input_dicts = df["prompt"].values.flatten().tolist()
-inputs = [d["text"] for d in input_dicts]
+    utils.set_seed(42)
+    utils.clear_memory()
 
-# %%
-hf_key = utils.api_key_from_file("HF_KEY.txt")
+    prompts = utils.load_jsonl_prompts(args.prompts_path)
 
-# %%
-rater_params = {
-    "model_type": "original",
-    "amp": True,
-}
+    rater_params = config.rater_params()
+    generator_params = config.generator_params(
+        model_name=args.model_name,
+        hf_key=config.get_hf_key(args.hf_key_path),
+        max_input_tokens=args.max_input_tokens,
+        max_output_tokens=args.max_output_tokens,
+    )
 
-# %%
-generator_params = {
-    "model_name": "meta-llama/Llama-3.2-1B",
-    "hub_token": hf_key,
-    "max_input_tokens": 40,
-    "max_output_tokens": 30,
-    "torch_dtype": torch.bfloat16,
-}
+    results = generate_survival_results_generic(
+        prompts=prompts,
+        prompt_attempts=None,
+        generate_params={"batch_size": args.batch_size},
+        generator_params=generator_params,
+        rater_params=rater_params,
+        max_attempts=args.max_attempts,
+        toxicity_func="no_toxicity",
+        text_prep_func="sentence_completion",
+        conserve_memory_ratings=True,
+        multi_gpu=True,
+    )
 
-# %%
-# create survival analysis runner
+    survival_list: list[SurvivalResult] = [res for res in results]
+    with open(args.output, "wb") as f:
+        pickle.dump(survival_list, f)
 
-from src.survival_runner import (
-    SurvivalResult,
-    generate_survival_results_generic,
-)
 
-batch_size = 1500
-max_attempts = 5000
-checkpoint_file = "multisample_checkpoint.pkl"
-
-survival_results = generate_survival_results_generic(
-    prompts=inputs,
-    prompt_attempts=None,
-    generate_params={"batch_size": batch_size},
-    generator_params=generator_params,
-    rater_params=rater_params,
-    max_attempts=max_attempts,
-    toxicity_func="no_toxicity",
-    text_prep_func="sentence_completion",
-    conserve_memory_ratings=True,
-    multi_gpu=True,
-)
-
-# %%
-# run survival analysis and collect results
-
-survival_list: list[SurvivalResult] = [res for res in survival_results]
-
-# %%
-# Save final results to disk
-
-with open("multisample_results.pkl", "wb") as f:
-    pickle.dump(survival_list, f)
+if __name__ == "__main__":
+    main()

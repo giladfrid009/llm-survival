@@ -37,12 +37,12 @@ This script:
 > **Note:** Main real-data experiment outputs are already available in:
 >
 > * `results.csv` (calibrated)
-> * `results_uncalibrated.csv`
+> * `results_uncalib.csv`
 >
 > To visualize them without rerunning, simply run:
 >
 > ```bash
-> jupyter nbconvert --to python --execute real_data_plots.ipynb
+> python real_data_plots.py
 > ```
 
 #### 1. Dataset Creation and Preparation
@@ -53,7 +53,10 @@ This script:
 python make_multisample.py
 
 # Split the data into training/validation/calibration/test sets
-python data/make_split_ms.py --data_path /path/to/multisample_results.pkl --seed 1 --proportions 0.5,0.1,0.2,0.2
+python split_dataset.py --data_path /path/to/multisample_results.pkl --seed 1 --proportions 0.5,0.1,0.2,0.2
+
+# Extract the base test prompts (required by ``make_mini_sample.py``)
+python prepare_test_set.py --base_dataset data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl --dataset_types prompt_only
 ```
 
 Here you can change the LLM and toxicity detector used before running the code.
@@ -68,13 +71,18 @@ python finetune_detoxify.py -c configs/Prop_RTP_500_ModernBERT.json
 #### 3. Generate Additional Test Samples (Optional, for robust evaluation)
 
 ```bash
-# Generate mini test samples
-python make_mini_sample.py
+# Generate mini test samples using the extracted prompts
+python make_mini_sample.py --prompts_path data/test_prompt_only.pkl
 
-# Combine the mini datasets
-# Execute each cell in the notebook
-jupyter nbconvert --to python --execute combine_minisets.ipynb
+# Merge the original test split with any generated mini-sets
+python prepare_test_set.py \
+  --base_dataset data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl \
+  --fragments_dir mini_datasets \
+  --dataset_types prompt_only,surv_only
 ```
+
+``prepare_test_set.py`` must be run at least once to extract
+``test_prompt_only.pkl`` and ``test_surv_times.npy``.
 
 #### 4. Running Experiments
 
@@ -85,27 +93,26 @@ Change the paths in the files to be the updated model and dataset paths, before 
 python real_data_experiments.py
 
 # Evaluate the uncalibrated model baseline
-# Execute each cell in the notebook
-jupyter nbconvert --to python --execute real_data_uncalib_experiments.ipynb
+python real_data_uncalib_experiments.py
 ```
 
 #### 5. Visualize Results
 
 ```bash
 # Create plots from the experimental results
-# Execute each cell in the notebook
-jupyter nbconvert --to python --execute real_data_plots.ipynb
+python real_data_plots.py
 ```
 
 ## File Descriptions
 
 - `synthetic_exp.py`: Self-contained script for synthetic experiments
 - `make_multisample.py`: Generates output toxicity samples using LLMs
-- `data/make_split_ms.py`: Splits datasets into train/val/cal/test sets
+- `split_dataset.py`: Splits datasets into train/val/cal/test sets
 - `make_mini_sample.py`: Creates additional test samples for evaluation
-- `combine_minisets.ipynb`: Combines multiple mini datasets into one larger set
+- `prepare_test_set.py`: Merges the test split with optional mini-sets and
+  writes `test_prompt_only.pkl` and `test_surv_times.npy`
 - `finetune_detoxify.py`: Trains toxicity classifiers on data
 - `real_data_experiments.py`: Runs the main calibrated prediction experiments
-- `real_data_uncalib_experiments.ipynb`: Evaluates uncalibrated baseline models
-- `real_data_plots.ipynb`: Generates result visualizations from experiment data
+- `real_data_uncalib_experiments.py`: Evaluates uncalibrated baseline models
+- `real_data_plots.py`: Generates result visualizations from experiment data
 - `run_survival.py`: Utility for running survival analysis on prompts

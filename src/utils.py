@@ -5,6 +5,8 @@ import torch
 import numpy
 import random
 import gc
+import pandas as pd
+import fsspec
 
 
 import contextlib
@@ -181,3 +183,11 @@ def api_key_from_file(path: str) -> str:
             return f.read().strip()
     else:
         raise FileNotFoundError("API key file not found")
+
+
+def load_jsonl_prompts(path: str, limit: int | None = None) -> list[str]:
+    """Return a list of prompt strings from a JSONL file."""
+    with fsspec.open(path, "r") as f:
+        df = pd.read_json(f, lines=True)
+    prompts = [d["text"] for d in df["prompt"].values.flatten().tolist()]
+    return prompts[:limit] if limit else prompts

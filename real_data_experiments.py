@@ -1,12 +1,22 @@
+"""Main calibrated real-data experiments used in the paper.
+
+This script loads the split dataset, fine-tuned toxicity classifier and runs the
+conformalized budgeting strategies described in the paper.  Results are appended
+to ``results.csv`` by default and can later be visualized with
+``real_data_plots.py``.
+"""
+
 import pytorch_lightning as pl
 from huggingface_hub.hf_api import HfFolder
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
 import pandas as pd
+import argparse
+import config
 
 from src.failure_model import ToxicClassifier
-from src.datasets import PromptOnlyDataset, SurvivalDataset
+from src.datasets import PromptOnlyDataset
 from src.conformal import conformalize
 from src import utils
 
@@ -26,55 +36,56 @@ torch._dynamo.config.suppress_errors = True
 #############################################################################################################
 
 
-# Get the Hugging Face key and save it
-HF_KEY = utils.api_key_from_file("HF_KEY.txt")
-
-# experiment parameters
-
-CAL_PROMPTS_PATH = "data/rtp_500/split_1_0.5_0.1_0.2_0.2/cal.pkl"
-TEST_PROMPTS_PATH = "data/test_prompt_only.pkl"
-TEST_SURV_TIME_PATH = "data/test_surv_times.npy"
-
-MODEL_PATH = "saved/Prop_rtp_500_ModernBERT/lightning_logs/version_3/checkpoints/epoch=0-step=99.ckpt"
-
-# Create the parameter dictionary for the rating backend.
-RATER_PARAMS = {
-    "model_type": "original",
-    "amp": True,
+EXPERIMENT_OPTIONS = {
+    "fixed": ("Fixed Budgeting", None, False, True),
+    "adaptive": ("Adaptive Budgeting", None, False, False),
+    "capped": ("Capped Adaptive Budgeting", 0.5, False, False),
+    "global": ("Global Budgeting", 0.5, True, False),
 }
 
-# Create the parameter dictionary for the generation backend.
-GENERATOR_PARAMS = {
-    "model_name": "meta-llama/Llama-3.2-1B",
-    "hub_token": HF_KEY,
-    "max_input_tokens": 40,
-    "max_output_tokens": 30,
-    "torch_dtype": torch.bfloat16,
-}
-
-TARGET_TAUS = torch.tensor([0.1])
-MIN_TAU_EXP = -3
-MAX_TAU_EXP = -0.25
-NUM_TAUS = 1000
-TAUS_RANGE = torch.tensor(np.logspace(MIN_TAU_EXP, MAX_TAU_EXP, NUM_TAUS))
-
-TOXICITY_FUNC = None
+# Generation and rating settings used across all experiments
+TOXICITY_FUNC = "no_toxicity"
 TEXT_PREP_FUNC = "sentence_completion"
-BATCH_SIZE = 1300
 
-# name, min_sample_size, share_budget, naive
-EXPERIMENTS = [
-    ("Fixed Budgeting", None, False, True),
-    # ("Adaptive Budgeting", None, False, False),
-    # ("Capped Adaptive Budgeting", 0.5, False, False),
-    ("Global Budgeting", 0.5, True, False),
-]
 
-NUM_RUNS = 5
-# BUDGET_RANGE = [10, 25, 50, 100, 200, 300, 600]
-BUDGET_RANGE = [1200]
-
-SAVE_PATH = "results.csv"
+def parse_args() -> argparse.Namespace:
+    """CLI arguments for the real-data experiments."""
+    parser = argparse.ArgumentParser(description="Run real data experiments")
+    parser.add_argument("--cal_prompts_path", default=config.default_cal_prompts_path,
+                        help="Pickle file of calibration prompts")
+    parser.add_argument("--test_prompts_path", default=config.default_test_prompts_path,
+                        help="Pickle file of test prompts")
+    parser.add_argument("--test_surv_time_path", default=config.default_test_surv_time_path,
+                        help="Numpy file of survival times")
+    parser.add_argument("--model_path", default=config.default_model_path,
+                        help="Path to trained toxicity model checkpoint")
+    parser.add_argument("--save_path", default=config.default_exp_results_path,
+                        help="CSV file to append experiment results")
+    parser.add_argument("--batch_size", type=int, default=1300,
+                        help="Batch size for model predictions")
+    parser.add_argument("--budgets", type=int, nargs="*", default=[1200],
+                        help="Budgets (samples per prompt) to evaluate")
+    parser.add_argument("--num_runs", type=int, default=5,
+                        help="Number of independent experiment runs")
+    parser.add_argument("--target_tau", type=float, default=0.1,
+                        help="Target miscoverage level")
+    parser.add_argument("--min_tau_exp", type=float, default=-3,
+                        help="log10 of smallest tau in search grid")
+    parser.add_argument("--max_tau_exp", type=float, default=-0.25,
+                        help="log10 of largest tau in search grid")
+    parser.add_argument("--num_taus", type=int, default=1000,
+                        help="Number of tau values in the grid")
+    parser.add_argument("--hf_key_path", default=config.hf_key_path,
+                        help="Path to HF API key")
+    parser.add_argument("--model_name", default=config.default_model_name,
+                        help="Name of the generator model")
+    parser.add_argument("--max_input_tokens", type=int, default=config.default_max_input_tokens,
+                        help="Maximum prompt tokens for generation")
+    parser.add_argument("--max_output_tokens", type=int, default=config.default_max_output_tokens,
+                        help="Maximum tokens to generate")
+    parser.add_argument("--experiments", default="all",
+                        help="Comma-separated list of experiment types to run: fixed, adaptive, capped, global, or 'all'")
+    return parser.parse_args()
 
 
 #############################################################################################################
@@ -141,29 +152,29 @@ def configure_logging(level=logging.ERROR):
     torch._logging.set_logs(all=level)
 
 
-def print_config():
+def print_config(args: argparse.Namespace) -> None:
     print("CONFIG:")
 
     print(f" - Paths:")
-    print(f"   - CAL_PROMPTS_PATH:  {CAL_PROMPTS_PATH}")
-    print(f"   - TEST_PROMPTS_PATH: {TEST_PROMPTS_PATH}")
-    print(f"   - TEST_SURV_PATH:    {TEST_SURV_TIME_PATH}")
-    print(f"   - MODEL_PATH:        {MODEL_PATH}")
-    print(f"   - SAVE_PATH:         {SAVE_PATH}")
+    print(f"   - CAL_PROMPTS_PATH:  {args.cal_prompts_path}")
+    print(f"   - TEST_PROMPTS_PATH: {args.test_prompts_path}")
+    print(f"   - TEST_SURV_PATH:    {args.test_surv_time_path}")
+    print(f"   - MODEL_PATH:        {args.model_path}")
+    print(f"   - SAVE_PATH:         {args.save_path}")
 
     print(f" - Parameters:")
-    print(f"   - GENERATOR_PARAMS:  {GENERATOR_PARAMS}")
-    print(f"   - RATER_PARAMS:      {RATER_PARAMS}")
-    print(f"   - BATCH_SIZE:        {BATCH_SIZE}")
-    print(f"   - TOXICITY_FUNC:     {TOXICITY_FUNC}")
-    print(f"   - TEXT_PREP_FUNC:    {TEXT_PREP_FUNC}")
+    print(f"   - GENERATOR_PARAMS:  {{'model_name': args.model_name}}")
+    print(f"   - RATER_PARAMS:      {{'model_type': 'original', 'amp': True}}")
+    print(f"   - BATCH_SIZE:        {args.batch_size}")
+    print(f"   - TOXICITY_FUNC:     {None}")
+    print(f"   - TEXT_PREP_FUNC:    {'sentence_completion'}")
 
     print(f" - Experiment:")
-    print(f"   - TARGET_TAU:        {TARGET_TAUS}")
-    print(f"   - TEST TAUS:         logspace({MIN_TAU_EXP}, {MAX_TAU_EXP}, {NUM_TAUS})")
-    print(f"   - EXPERIMENTS:       {EXPERIMENTS}")
-    print(f"   - NUM_RUNS:          {NUM_RUNS}")
-    print(f"   - BUDGET_RANGE:      {BUDGET_RANGE}")
+    print(f"   - TARGET_TAU:        {args.target_tau}")
+    print(f"   - TEST TAUS:         logspace({args.min_tau_exp}, {args.max_tau_exp}, {args.num_taus})")
+    print(f"   - EXPERIMENTS:       {args.experiments}")
+    print(f"   - NUM_RUNS:          {args.num_runs}")
+    print(f"   - BUDGET_RANGE:      {args.budgets}")
 
     print("-" * 100)
 
@@ -181,44 +192,53 @@ def print_result(result_dict):
 #############################################################################################################
 
 
-def run_experiments():
+def run_experiments(args: argparse.Namespace) -> None:
+    """Perform all experiment runs and append results to ``args.save_path``."""
 
-    print_config()
+    print_config(args)
 
-    results_df = validate_save_path(SAVE_PATH)
+    sel = [s.strip().lower() for s in args.experiments.split(',') if s.strip()]
+    if "all" in sel:
+        experiments = list(EXPERIMENT_OPTIONS.values())
+    else:
+        experiments = [EXPERIMENT_OPTIONS[s] for s in sel]
+
+    results_df = validate_save_path(args.save_path)
     if results_df is None:
         results_df = pd.DataFrame()
 
     # load data
-    ds_cal = PromptOnlyDataset(CAL_PROMPTS_PATH)
-    ds_test = PromptOnlyDataset(TEST_PROMPTS_PATH)
-    dl_test = DataLoader(ds_test, batch_size=1500, shuffle=False)
+    ds_cal = PromptOnlyDataset(args.cal_prompts_path)
+    ds_test = PromptOnlyDataset(args.test_prompts_path)
+    dl_test = DataLoader(ds_test, batch_size=args.batch_size, shuffle=False)
 
     # load test set survival times
-    test_t_tilde = np.load(TEST_SURV_TIME_PATH)
+    test_t_tilde = np.load(args.test_surv_time_path)
 
     print(f"Loaded {len(ds_cal)} calibration samples and {len(ds_test)} test samples.")
 
     # load model
-    model = ToxicClassifier.load_from_checkpoint(MODEL_PATH)
+    model = ToxicClassifier.load_from_checkpoint(args.model_path)
     _ = model.eval()
 
-    model.set_taus(TAUS_RANGE)
+    taus_range = torch.tensor(np.logspace(args.min_tau_exp, args.max_tau_exp, args.num_taus))
+    target_taus = torch.tensor([args.target_tau])
+    model.set_taus(taus_range)
     model.set_min_p_for_q_tau(1e-20)
 
     # NOTE: dont enable multiple-gpus for inference, as it causes weird bugs
     trainer = pl.Trainer(enable_progress_bar=False, accelerator="gpu", devices=1)
 
-    for run_num in range(NUM_RUNS):
+    for run_num in range(args.num_runs):
 
-        for exp_type in EXPERIMENTS:
+        for exp_type in experiments:
 
             name, min_sample_size, share_budget, naive = exp_type
 
-            for budget in BUDGET_RANGE:
+            for budget in args.budgets:
 
                 print("-" * 60)
-                print(f"Running {name} with budget {budget} (run {run_num + 1}/{NUM_RUNS})")
+                print(f"Running {name} with budget {budget} (run {run_num + 1}/{args.num_runs})")
                 print("-" * 60)
 
                 # check if experiment already exists
@@ -233,7 +253,7 @@ def run_experiments():
                         & (results_df["exp_budget"] == budget)
                     ).any()
                 ):
-                    print(f"Skipping {name} with budget {budget} (run {run_num + 1}/{NUM_RUNS}) - already done.")
+                    print(f"Skipping {name} with budget {budget} (run {run_num + 1}/{args.num_runs}) - already done.")
                     continue
 
                 cal_start_time = time.time()
@@ -244,11 +264,16 @@ def run_experiments():
                 result_tuple = conformalize(
                     trainer=trainer,
                     model=model,
-                    target_taus=TARGET_TAUS,
-                    canidate_taus=TAUS_RANGE,
+                    target_taus=target_taus,
+                    canidate_taus=taus_range,
                     X=ds_cal,
-                    generator_params=GENERATOR_PARAMS,
-                    rater_params=RATER_PARAMS,
+                    generator_params=config.generator_params(
+                        model_name=args.model_name,
+                        hf_key=config.get_hf_key(args.hf_key_path),
+                        max_input_tokens=args.max_input_tokens,
+                        max_output_tokens=args.max_output_tokens,
+                    ),
+                    rater_params=config.rater_params(),
                     budget_per_sample=budget,
                     share_budget=share_budget,
                     min_sample_size=min_sample_size,
@@ -258,7 +283,7 @@ def run_experiments():
                     multi_gpu=torch.cuda.device_count() > 1,
                     plot=False,
                     return_extra=True,
-                    batch_size=BATCH_SIZE,
+                    batch_size=args.batch_size,
                 )
 
                 (
@@ -278,7 +303,7 @@ def run_experiments():
                 cal_hours = round(cal_hours / (60 * 60), 3)  # convert to hours
 
                 # compute empirical miscoverage on calibration set
-                tau_hat_idx = np.argmin(torch.abs(TAUS_RANGE - tau_hat)).item()
+                tau_hat_idx = np.argmin(torch.abs(taus_range - tau_hat)).item()
                 cal_miscoverage = miscoverage[tau_hat_idx].item()
 
                 # compute total number of generated samples
@@ -328,24 +353,20 @@ def run_experiments():
 
                 results_df = pd.concat([results_df, pd.DataFrame([result_dict])], ignore_index=True)
 
-                save_results(SAVE_PATH, results_df)
+                save_results(args.save_path, results_df)
 
 
-def main():
+def main() -> None:
+    """CLI entry point for the calibrated experiments."""
+    args = parse_args()
 
-    # NOTE: open a new terminal session after running this if you encounter HF token issues
-    # in any of the workers or the main process
-    HfFolder.save_token(HF_KEY)
+    HfFolder.save_token(config.get_hf_key())
 
-    # NOTE: to stop pytorch breaking
     torch.multiprocessing.set_start_method("spawn", force=True)
 
     configure_logging(logging.ERROR)
-    
-    # NOTE: fix more errors in VLLM so fun
-    # os.environ["TORCHINDUCTOR_FORCE_DISABLE_CACHES"] = "1"
 
-    run_experiments()
+    run_experiments(args)
 
 
 if __name__ == "__main__":
