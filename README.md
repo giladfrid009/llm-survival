@@ -18,6 +18,8 @@ Place your API keys in the following text files in the root directory:
 
 ## Experiments
 
+***NOTE: for all scripts, to understand their expected arguments type: `python scripts/<script_name> --help`***
+
 ### Synthetic Experiments
 
 The synthetic experiments are self-contained in a single script:
@@ -42,7 +44,7 @@ This script:
 > To visualize them without rerunning, simply run:
 >
 > ```bash
-> python real_data_plots.py
+> python scripts/real_data_plots.py
 > ```
 
 #### 1. Dataset Creation and Preparation
