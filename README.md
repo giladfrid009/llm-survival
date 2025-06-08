@@ -23,7 +23,7 @@ Place your API keys in the following text files in the root directory:
 The synthetic experiments are self-contained in a single script:
 
 ```bash
-python synthetic_exp.py
+python scripts/synthetic_exp.py
 ```
 
 This script:
@@ -50,13 +50,13 @@ This script:
 
 ```bash
 # Generate initial survival dataset using LLM samples
-python make_multisample.py
+python scripts/make_multisample.py
 
 # Split the data into training/validation/calibration/test sets
-python split_dataset.py --data_path /path/to/multisample_results.pkl --seed 1 --proportions 0.5,0.1,0.2,0.2
+python scripts/split_dataset.py --data_path /path/to/multisample_results.pkl --seed 1 --proportions 0.5,0.1,0.2,0.2
 
 # Extract the base test prompts (required by ``make_mini_sample.py``)
-python prepare_test_set.py --base_dataset data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl --dataset_types prompt_only
+python scripts/prepare_test_set.py --base_dataset data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl --dataset_types prompt_only
 ```
 
 Here you can change the LLM and toxicity detector used before running the code.
@@ -65,17 +65,17 @@ Here you can change the LLM and toxicity detector used before running the code.
 
 ```bash
 # Fine-tune the toxicity classifier model
-python finetune_detoxify.py -c configs/Prop_RTP_500_ModernBERT.json
+python scripts/finetune_detoxify.py -c configs/Prop_RTP_500_ModernBERT.json
 ```
 
 #### 3. Generate Additional Test Samples (Optional, for robust evaluation)
 
 ```bash
 # Generate mini test samples using the extracted prompts
-python make_mini_sample.py --prompts_path data/test_prompt_only.pkl
+python scripts/make_mini_sample.py --prompts_path data/test_prompt_only.pkl
 
 # Merge the original test split with any generated mini-sets
-python prepare_test_set.py \
+python scripts/prepare_test_set.py \
   --base_dataset data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl \
   --fragments_dir mini_datasets \
   --dataset_types prompt_only,surv_only
@@ -90,21 +90,25 @@ Change the paths in the files to be the updated model and dataset paths, before 
 
 ```bash
 # Run the main experiments with calibrated models
-python real_data_experiments.py
+python scripts/real_data_experiments.py
 
 # Evaluate the uncalibrated model baseline
-python real_data_uncalib_experiments.py
+python scripts/real_data_uncalib_experiments.py
 ```
 
 #### 5. Visualize Results
 
 ```bash
 # Create plots from the experimental results
-python real_data_plots.py
+python scripts/real_data_plots.py
 ```
 
-## File Descriptions
+## Scripts File Descriptions
 
+All the relevant scripts are located within the `scripts` folder
+
+- `config.py`: contains important default configurations shared across all scripts.
+    Note that this file is not a script.
 - `synthetic_exp.py`: Self-contained script for synthetic experiments
 - `make_multisample.py`: Generates output toxicity samples using LLMs
 - `split_dataset.py`: Splits datasets into train/val/cal/test sets
@@ -114,4 +118,4 @@ python real_data_plots.py
 - `finetune_detoxify.py`: Trains toxicity classifiers on data
 - `real_data_experiments.py`: Runs the main calibrated prediction experiments
 - `real_data_uncalib_experiments.py`: Evaluates uncalibrated baseline models
-- `real_data_plots.py`: Generates result visualizations from experiment data
+- `real_data_plots.py`: Generates result visualizations from experiment dat
