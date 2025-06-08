@@ -22,7 +22,7 @@ import os
 import logging
 import torch._dynamo
 import argparse
-import config
+from scripts import config
 
 torch._dynamo.config.suppress_errors = True
 

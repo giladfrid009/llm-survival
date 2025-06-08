@@ -16,7 +16,7 @@ import logging
 
 from src import utils
 from src.survival_runner import SurvivalResult, generate_survival_results_generic
-import config
+from scripts import config
 
 
 def parse_args() -> argparse.Namespace:

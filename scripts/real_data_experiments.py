@@ -15,7 +15,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 import pandas as pd
 import argparse
-import config
+from scripts import config
 
 from src.failure_model import ToxicClassifier
 from src.datasets import PromptOnlyDataset

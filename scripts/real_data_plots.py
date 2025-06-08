@@ -6,7 +6,7 @@ import argparse
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import config
+from scripts import config
 from src import utils
 
 def parse_args() -> argparse.Namespace:

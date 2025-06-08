@@ -13,7 +13,7 @@ import logging
 
 from src.datasets import PromptOnlyDataset
 from src.failure_model import ToxicClassifier
-import config
+from scripts import config
 from src import utils
 
 

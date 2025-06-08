@@ -45,7 +45,7 @@ from src import utils
 from src.survival_runner import SurvivalResult
 from src.rating.base import RatingResult
 from tqdm.auto import tqdm
-import config
+from scripts import config
 
 
 class DatasetType:

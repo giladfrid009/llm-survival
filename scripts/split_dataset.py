@@ -10,6 +10,7 @@ import pickle as pkl
 import random
 from typing import List
 from src import utils
+from scripts import config
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Split a pickled dataset into subsets")
