@@ -1,3 +1,5 @@
+# NOTE: works
+
 """Generate publication-quality plots from experiment CSV results."""
 
 import argparse
@@ -5,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import config
-
+from src import utils
 
 def parse_args() -> argparse.Namespace:
     """Return CLI arguments."""
@@ -19,9 +21,9 @@ def parse_args() -> argparse.Namespace:
     parsed = parser.parse_args()
     
     # make all paths absolute
-    parsed.results = config.abs_path(parsed.results)
-    parsed.results_uncalib = config.abs_path(parsed.results_uncalib)
-    parsed.output = config.abs_path(parsed.output)
+    parsed.results = utils.abs_path(parsed.results)
+    parsed.results_uncalib = utils.abs_path(parsed.results_uncalib)
+    parsed.output = utils.abs_path(parsed.output)
     
     # print all args
     print("Command line arguments:")

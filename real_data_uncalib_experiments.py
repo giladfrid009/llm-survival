@@ -1,3 +1,5 @@
+# NOTE: works
+
 """Evaluate the uncalibrated baseline model on the test prompts."""
 
 import argparse

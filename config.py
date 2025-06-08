@@ -54,8 +54,7 @@ def generator_params(
 ) -> Dict[str, Any]:
     """Return parameters for ``VanillaGeneratorVLLM``.
 
-    Parameters mirror the CLI options of ``run_survival.py`` and allow multiple
-    scripts to share consistent defaults.
+    allows multiple scripts to share consistent defaults.
     """
     hub_token = hf_key if hf_key is not None else get_hf_key()
     return {

@@ -1,3 +1,5 @@
+# NOTE: works
+
 """Main calibrated real-data experiments used in the paper.
 
 This script loads the split dataset, fine-tuned toxicity classifier and runs the
@@ -137,22 +139,6 @@ def load_results(save_path):
 
 
 def print_config(args: argparse.Namespace) -> None:
-    print("CONFIG:")
-
-    print(f" - Paths:")
-    print(f"   - CAL_PROMPTS_PATH:  {args.cal_prompts_path}")
-    print(f"   - TEST_PROMPTS_PATH: {args.test_prompts_path}")
-    print(f"   - TEST_SURV_PATH:    {args.test_surv_time_path}")
-    print(f"   - MODEL_PATH:        {args.model_path}")
-    print(f"   - SAVE_PATH:         {args.save_path}")
-
-    print(f" - Parameters:")
-    print(f"   - GENERATOR_PARAMS:  {{'model_name': args.model_name}}")
-    print(f"   - RATER_PARAMS:      {{'model_type': 'original', 'amp': True}}")
-    print(f"   - BATCH_SIZE:        {args.batch_size}")
-    print(f"   - TOXICITY_FUNC:     {None}")
-    print(f"   - TEXT_PREP_FUNC:    {'sentence_completion'}")
-
     print(f" - Experiment:")
     print(f"   - TARGET_TAU:        {args.target_tau}")
     print(f"   - TEST TAUS:         logspace({args.min_tau_exp}, {args.max_tau_exp}, {args.num_taus})")
