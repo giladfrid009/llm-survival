@@ -176,9 +176,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch_size", type=int, default=config.default_batch_size, help="Batch size for generation")
     parser.add_argument("--max_attempts", type=int, default=config.default_max_attempts, help="Maximum generations per prompt")
     parser.add_argument("--seed", type=int, default=42)
-    
-    # print all args
+
     parsed = parser.parse_args()
+
+    # make all paths absolute
+    parsed.output = utils.abs_path(parsed.output)
+    parsed.hf_key_path = utils.abs_path(parsed.hf_key_path)    
+
+    # print all args
     print("Command line arguments:")
     for arg, value in vars(parsed).items():
         print(f"  {arg}: {value}")

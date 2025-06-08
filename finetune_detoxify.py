@@ -1,8 +1,11 @@
+# NOTE: working
+
 # Adapted github.com/unitaryai/detoxify
 import argparse
 import json
 import os
 from typing import Literal
+from src import utils
 
 # Disable tokenizer parallelism to avoid deadlocks due to forking
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -13,6 +16,7 @@ from src.failure_model import ToxicClassifier
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 import torch._dynamo
+import logging
 
 torch._dynamo.config.suppress_errors = True
 
@@ -51,8 +55,15 @@ def cli_main():
     )
     parser.add_argument("-e", "--n_epochs", default=2, type=int, help="if given, override the num")
 
-    # print all args
     args = parser.parse_args()
+
+    # make all paths absolute
+    if args.config is not None:
+        args.config = utils.abs_path(args.config)
+    if args.resume is not None:
+        args.resume = utils.abs_path(args.resume)
+
+    # print all args
     print("Command line arguments:")
     for arg, value in vars(args).items():
         print(f"  {arg}: {value}")
@@ -120,4 +131,5 @@ def cli_main():
 
 
 if __name__ == "__main__":
+    utils.configure_logging(logging.WARNING)
     cli_main()

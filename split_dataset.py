@@ -7,7 +7,7 @@ import os
 import pickle as pkl
 import random
 from typing import List
-
+from src import utils
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Split a pickled dataset into subsets")
@@ -35,7 +35,19 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Directory to write the split pickles (default derived from data_path)",
     )
-    return parser.parse_args()
+    
+    parsed = parser.parse_args()
+    
+    # make all paths absolute
+    parsed.data_path = utils.abs_path(parsed.data_path)
+    parsed.output_dir = utils.abs_path(parsed.output_dir, ignore=None)
+    
+    # print all args
+    print("Command line arguments:")
+    for arg, value in vars(parsed).items():
+        print(f"  {arg}: {value}")
+    
+    return parsed
 
 
 def main() -> None:

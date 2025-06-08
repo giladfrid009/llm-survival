@@ -73,8 +73,17 @@ def parse_args() -> argparse.Namespace:
         "--experiments", default="all", help="Comma-separated list of experiment types to run: fixed, adaptive, capped, global, or 'all'"
     )
     
-    # print all args
     parsed = parser.parse_args()
+    
+    # make all paths absolute
+    parsed.cal_prompts_path = utils.abs_path(parsed.cal_prompts_path)
+    parsed.test_prompts_path = utils.abs_path(parsed.test_prompts_path)
+    parsed.test_surv_time_path = utils.abs_path(parsed.test_surv_time_path)
+    parsed.model_path = utils.abs_path(parsed.model_path)
+    parsed.save_path = utils.abs_path(parsed.save_path)
+    parsed.hf_key_path = utils.abs_path(parsed.hf_key_path)
+    
+    # print all args
     print("Command line arguments:")
     for arg, value in vars(parsed).items():
         print(f"  {arg}: {value}")
@@ -125,24 +134,6 @@ def load_results(save_path):
     df = pd.read_csv(save_path, index_col=None)
     print(f"Results loaded from {save_path}")
     return df
-
-
-def configure_logging(level=logging.ERROR):
-    logging.captureWarnings(True)
-    logging.basicConfig(level=level)
-    logging.getLogger().setLevel(level)
-
-    # set level for all loggers
-    for name, logger in logging.root.manager.loggerDict.items():
-        if isinstance(logger, logging.Logger):
-            logger.setLevel(level)
-            for h in logger.handlers:
-                h.setLevel(level)
-
-    os.environ["LOGLEVEL"] = logging.getLevelName(level)
-    os.environ["VLLM_LOGGING_LEVEL"] = logging.getLevelName(level)
-    logging.getLogger("lightning.pytorch").setLevel(level)
-    torch._logging.set_logs(all=level)
 
 
 def print_config(args: argparse.Namespace) -> None:
@@ -352,13 +343,9 @@ def run_experiments(args: argparse.Namespace) -> None:
 def main() -> None:
     """CLI entry point for the calibrated experiments."""
     args = parse_args()
-
     HfFolder.save_token(config.get_hf_key())
-
     torch.multiprocessing.set_start_method("spawn", force=True)
-
-    configure_logging(logging.ERROR)
-
+    utils.configure_logging(logging.WARNING)
     run_experiments(args)
 
 

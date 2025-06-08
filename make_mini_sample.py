@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate survival mini datasets")
     parser.add_argument(
         "--prompts_path", # NOTE: works!
-        default=None,
+        default="none",
         help=("Pickle file containing prompts to extend. If omitted, prompts are read from --base_dataset."),
     )
     parser.add_argument(
@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--batch_size", type=int, default=config.default_batch_size, help="Batch size for generation")
-    parser.add_argument("--max_attempts", type=int, default=100, help="Number of generations attempted per prompt")
+    parser.add_argument("--num_attempts", type=int, default=100, help="Number of output generations per prompt")
     parser.add_argument("--total_datasets", type=int, default=100, help="Number of mini-sets to create")
     parser.add_argument("--mini_sample_folder", default=DEFAULT_FOLDER, help="Directory to store the generated fragments")
     parser.add_argument("--mini_sample_file_name", default=DEFAULT_FILE_NAME, help="Base name for each fragment (index and .pkl added)")
@@ -69,8 +69,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_input_tokens", type=int, default=config.default_max_input_tokens)
     parser.add_argument("--max_output_tokens", type=int, default=config.default_max_output_tokens)
     
-    # print all args
     parsed = parser.parse_args()
+
+    # make all paths absolute
+    parsed.prompts_path = utils.abs_path(parsed.prompts_path, ignore="none")
+    parsed.base_dataset = utils.abs_path(parsed.base_dataset, ignore="none")
+    parsed.mini_sample_folder = utils.abs_path(parsed.mini_sample_folder)
+    parsed.hf_key_path = utils.abs_path(parsed.hf_key_path)
+
+    # print all args
     print("Command line arguments:")
     for arg, value in vars(parsed).items():
         print(f"  {arg}: {value}")
@@ -80,25 +87,6 @@ def parse_args() -> argparse.Namespace:
 ###########
 # FUNCTIONS
 ###########
-
-
-def configure_logging(level=logging.ERROR):
-    """Silence noisy libraries and set a global log level."""
-    logging.captureWarnings(True)
-    logging.basicConfig(level=level)
-    logging.getLogger().setLevel(level)
-
-    # set level for all loggers
-    for name, logger in logging.root.manager.loggerDict.items():
-        if isinstance(logger, logging.Logger):
-            logger.setLevel(level)
-            for h in logger.handlers:
-                h.setLevel(level)
-
-    os.environ["LOGLEVEL"] = logging.getLevelName(level)
-    os.environ["VLLM_LOGGING_LEVEL"] = logging.getLevelName(level)
-    logging.getLogger("lightning.pytorch").setLevel(level)
-    torch._logging.set_logs(all=level)
 
 
 def validate_save_path(save_path: str, start_idx: int) -> int:
@@ -152,7 +140,7 @@ def create_datasets(args: argparse.Namespace):
         survival_results = generate_survival_results_generic(
             prompts=prompts,
             prompt_ids=list(range(len(prompts))),
-            prompt_attempts=[args.max_attempts] * len(prompts),
+            prompt_attempts=[args.num_attempts] * len(prompts),
             generate_params={"batch_size": args.batch_size},
             generator_params=config.generator_params(
                 model_name=args.model_name,
@@ -161,7 +149,7 @@ def create_datasets(args: argparse.Namespace):
                 max_output_tokens=args.max_output_tokens,
             ),
             rater_params=config.rater_params(),
-            max_attempts=args.max_attempts,
+            max_attempts=args.num_attempts,
             toxicity_func="no_toxicity",
             text_prep_func="sentence_completion",
             conserve_memory_ratings=False,
@@ -183,17 +171,16 @@ def main() -> None:
     """Entry point for script execution."""
     args = parse_args()
 
+    if args.prompts_path and args.prompts_path.lower() == "none":
+        args.prompts_path = None
+        
     if args.base_dataset and args.base_dataset.lower() == "none":
         args.base_dataset = None
 
     utils.clear_memory()
-
     HfFolder.save_token(config.get_hf_key(args.hf_key_path))
-
     torch.multiprocessing.set_start_method("spawn", force=True)
-
-    configure_logging(logging.ERROR)
-
+    utils.configure_logging(logging.WARNING)
     create_datasets(args)
 
 

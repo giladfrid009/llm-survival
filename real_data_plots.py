@@ -16,8 +16,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", default="figures/real_data_results.png", help="Path for the output plot image")
     
-    # print all args
     parsed = parser.parse_args()
+    
+    # make all paths absolute
+    parsed.results = config.abs_path(parsed.results)
+    parsed.results_uncalib = config.abs_path(parsed.results_uncalib)
+    parsed.output = config.abs_path(parsed.output)
+    
+    # print all args
     print("Command line arguments:")
     for arg, value in vars(parsed).items():
         print(f"  {arg}: {value}")

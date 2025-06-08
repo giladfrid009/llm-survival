@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from huggingface_hub.hf_api import HfFolder
+import logging
 
 from src.datasets import PromptOnlyDataset
 from src.failure_model import ToxicClassifier
@@ -25,11 +26,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default=config.default_uncalib_results_path, help="CSV file to write results")
     parser.add_argument("--hf_key_path", default=config.hf_key_path, help="Path to HuggingFace API key")
     
-    # print all args
     parsed = parser.parse_args()
+    
+    # make all paths absolute
+    parsed.test_prompts_path = utils.abs_path(parsed.test_prompts_path)
+    parsed.test_surv_time_path = utils.abs_path(parsed.test_surv_time_path)
+    parsed.model_path = utils.abs_path(parsed.model_path)
+    parsed.output = utils.abs_path(parsed.output)
+    parsed.hf_key_path = utils.abs_path(parsed.hf_key_path)
+    
+    # print all args
     print("Command line arguments:")
     for arg, value in vars(parsed).items():
         print(f"  {arg}: {value}")
+        
     return parsed
 
 
@@ -85,4 +95,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    torch.multiprocessing.set_start_method("spawn", force=True)
+    utils.configure_logging(logging.WARNING)
     main()

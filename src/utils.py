@@ -7,6 +7,8 @@ import random
 import gc
 import pandas as pd
 import fsspec
+import logging
+import os
 
 
 import contextlib
@@ -191,3 +193,31 @@ def load_jsonl_prompts(path: str, limit: int | None = None) -> list[str]:
         df = pd.read_json(f, lines=True)
     prompts = [d["text"] for d in df["prompt"].values.flatten().tolist()]
     return prompts[:limit] if limit else prompts
+
+
+def configure_logging(level=logging.ERROR):
+    """Silence noisy libraries and set a global log level."""
+    logging.captureWarnings(True)
+    logging.basicConfig(level=level)
+    logging.getLogger().setLevel(level)
+
+    # set level for all loggers
+    for name, logger in logging.root.manager.loggerDict.items():
+        if isinstance(logger, logging.Logger):
+            logger.setLevel(level)
+            for h in logger.handlers:
+                h.setLevel(level)
+
+    os.environ["LOGLEVEL"] = logging.getLevelName(level)
+    os.environ["VLLM_LOGGING_LEVEL"] = logging.getLevelName(level)
+    logging.getLogger("lightning.pytorch").setLevel(level)
+    torch._logging.set_logs(all=level)
+
+
+def abs_path(path: str, ignore: str | None = None) -> str:
+    """
+    Converts a path (relative or absolute) to an absolute path.
+    """
+    if path == ignore:
+        return path
+    return os.path.abspath(path)

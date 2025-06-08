@@ -1,3 +1,5 @@
+# NOTE: works
+
 """Prepare the evaluation test set from a base dataset and optional fragments.
 
 ``make_mini_sample.py`` can generate many small datasets ("mini-sets") for the
@@ -39,6 +41,7 @@ import numpy as np
 import glob
 import os
 
+from src import utils
 from src.survival_runner import SurvivalResult
 from src.rating.base import RatingResult
 from tqdm.auto import tqdm
@@ -82,9 +85,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output_prompt_only", default=config.default_test_prompts_path, help="Path for prompt-only pickle")
     parser.add_argument("--output_surv_times", default=config.default_test_surv_time_path, help="Path for numpy survival-time array")
     
+    parsed = parser.parse_args()
+    
+    # make all paths absolute
+    parsed.base_dataset = utils.abs_path(parsed.base_dataset, ignore="none")
+    parsed.fragments_dir = utils.abs_path(parsed.fragments_dir, ignore="none")
+    parsed.output_full = utils.abs_path(parsed.output_full)
+    parsed.output_full_light = utils.abs_path(parsed.output_full_light)
+    parsed.output_prompt_only = utils.abs_path(parsed.output_prompt_only)
+    parsed.output_surv_times = utils.abs_path(parsed.output_surv_times)
     
     # print all args
-    parsed = parser.parse_args()
     print("Command line arguments:")
     for arg, value in vars(parsed).items():
         print(f"  {arg}: {value}")
@@ -142,6 +153,7 @@ def save_dataset(data: List[SurvivalResult], dtype: str, args: argparse.Namespac
         os.makedirs(os.path.dirname(args.output_full), exist_ok=True)
         with open(args.output_full, "wb") as f:
             pickle.dump(data, f)
+    
     elif dtype == DatasetType.FULL_LIGHT:
         light = []
         for surv in data:
@@ -159,6 +171,7 @@ def save_dataset(data: List[SurvivalResult], dtype: str, args: argparse.Namespac
         os.makedirs(os.path.dirname(args.output_full_light), exist_ok=True)
         with open(args.output_full_light, "wb") as f:
             pickle.dump(light, f)
+            
     elif dtype == DatasetType.PROMPT_ONLY:
         prompt_only = [
             SurvivalResult(
@@ -173,7 +186,11 @@ def save_dataset(data: List[SurvivalResult], dtype: str, args: argparse.Namespac
         os.makedirs(os.path.dirname(args.output_prompt_only), exist_ok=True)
         with open(args.output_prompt_only, "wb") as f:
             pickle.dump(prompt_only, f)
+            
     elif dtype == DatasetType.SURV_ONLY:
+        #TODO: surv time should be the index of th first toxic rating or the total number of ratings
+        # here we imemdiatly set to the number of ratings, which assumes that we stopped generating once encountering a toxic rating
+        # note that doesnt have to hold. Therefore, we need to find a robust way to get the survival time
         surv_times = np.array([len(s.ratings) for s in data])
         os.makedirs(os.path.dirname(args.output_surv_times), exist_ok=True)
         np.save(args.output_surv_times, surv_times)
@@ -193,6 +210,10 @@ def main() -> None:
     if fragments_dir and os.path.isdir(fragments_dir):
         glob_pattern = os.path.join(fragments_dir, args.pattern)
         fragment_paths.extend(sorted(glob.glob(glob_pattern)))
+        
+    print("Processing datasets:")
+    for path in fragment_paths:
+        print(f"  {path}")
 
     if not fragment_paths:
         raise ValueError("No fragments found. Provide --base_dataset or --fragments_dir")
