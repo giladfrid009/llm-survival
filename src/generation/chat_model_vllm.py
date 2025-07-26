@@ -10,7 +10,7 @@ class ChatGeneratorVLLM(GenerationBackend):
         self,
         model_name: str,
         hf_token: str,
-        gpu_memory_utilization: float = 0.5,
+        gpu_memory_utilization: float = 0.8,
         max_input_tokens: int = 100,
         max_output_tokens: int = 100,
         max_batch_size: int = 1000,

@@ -145,6 +145,7 @@ def clear_memory() -> None:
     gc.collect()
     with torch.no_grad():
         torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
     gc.collect()
 
 
@@ -216,8 +217,10 @@ def configure_logging(level=logging.ERROR):
 
 def abs_path(path: str, ignore: str | None = None) -> str:
     """
-    Converts a path (relative or absolute) to an absolute path.
+    Converts a path (relative or absolute) to an absolute path. If the path is an hf URL, or matches the ignore path, it returns the path as is.
     """
     if path == ignore:
+        return path
+    if path.startswith("hf://"):
         return path
     return os.path.abspath(path)

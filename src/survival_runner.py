@@ -281,6 +281,8 @@ class SurvivalRunner:
 
                 active_tasks = next_tasks
                 fill_tasks()
+                utils.clear_memory()
+
 
                 # update ETA
                 batch_timer.update(time.time() - start)
@@ -328,7 +330,7 @@ def survival_runner_factory(
         MAX_INPUT_TOKENS = generator_params.get("max_input_tokens", 40)
         MAX_OUTPUT_TOKENS = generator_params.get("max_output_tokens", 30)
         BATCH_SIZE = generator_params.get("batch_size", 1500)
-        GPU_MEMORY_UTILIZATION = generator_params.get("gpu_memory_utilization", 0.5)
+        GPU_MEMORY_UTILIZATION = generator_params.get("gpu_memory_utilization", 0.8)
         model_name = generator_params.get("model_name", "meta-llama/Llama-3.2-1B")
 
         from src.generation.vanilla_model_vllm import VanillaGeneratorVLLM
