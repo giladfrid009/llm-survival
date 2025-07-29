@@ -78,7 +78,7 @@ python scripts/make_mini_sample.py --prompts_path data/test_prompt_only.pkl
 
 # Merge the original test split with any generated mini-sets
 python scripts/prepare_test_set.py \
-  --base_dataset data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl \
+  --base_dataset data/split_1_0.5_0.1_0.2_0.2/test.pkl \
   --fragments_dir mini_datasets \
   --dataset_types prompt_only,surv_only
 ```
