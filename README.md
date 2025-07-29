@@ -55,7 +55,7 @@ This script:
 python scripts/make_multisample.py
 
 # Split the data into training/validation/calibration/test sets
-python scripts/split_dataset.py --data_path /path/to/multisample_results.pkl --seed 1 --proportions 0.5,0.1,0.2,0.2
+python scripts/split_dataset.py --seed 1 --proportions 0.5,0.1,0.2,0.2 /path/to/multisample_results.pkl
 
 # Extract the base test prompts (required by ``make_mini_sample.py``)
 python scripts/prepare_test_set.py --base_dataset data/rtp_500/split_1_0.5_0.1_0.2_0.2/test.pkl --dataset_types prompt_only
